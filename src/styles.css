@@ -65,3 +65,5 @@
  .variantSection,.purchaseBox{width:100%}
  .purchaseBox{order:2}
 }
+
+.settingsPanel{max-width:760px}.adminHelp{margin:0;color:#8f97a3;font-size:13px;line-height:1.6}.settingsPanel textarea{resize:vertical}@media(max-width:650px){.settingsPanel{max-width:none}}
