@@ -1,4 +1,4 @@
-/* deploy-sync: current-site-functions-2026-10-02-1403 */
+/* deploy-sync: nexium-header-logo-only-2026-10-02 */
 import{useEffect,useState}from'react';import{Search,ShoppingBag,UserRound,Headphones,ShieldCheck,Zap,ChevronLeft,Star,PackageCheck}from'lucide-react';import{supabase}from'./lib/supabase';import Admin from'./Admin';
 type Product={id:string;name:string;category:string;price:number;old_price?:number|null;description?:string|null;requirements?:string|null;warranty_policy?:string|null;image_url?:string|null;automatic_delivery?:boolean};
 type Variant={id:string;name:string;price:number;stock:number};type AccountOrder={id:string;status:string;total:number;created_at:string};type ProductStock={minPrice:number;stock:number;hasVariants:boolean};type Review={id:string;display_name?:string|null;rating:number;comment?:string|null;created_at:string};
