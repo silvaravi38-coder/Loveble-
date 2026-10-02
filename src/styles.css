@@ -21,3 +21,47 @@
 .topNotice{min-height:34px;display:grid;place-items:center;padding:7px 14px;text-align:center;background:#10141c;border-bottom:1px solid #ffffff0d;color:#aab1bd;font-size:11px}.categoryBar{position:sticky;top:78px;z-index:19;display:flex;gap:25px;overflow-x:auto;padding:12px 6vw;border-bottom:1px solid #ffffff0d;background:#080a0ff5;scrollbar-width:none}.categoryBar::-webkit-scrollbar{display:none}.categoryBar a{white-space:nowrap;color:#a6adb8;font-size:12px;font-weight:700}.categoryBar a:hover{color:white}.detail{max-width:1180px}.productHero{align-items:start}.productCommerce{margin-top:28px;display:grid;grid-template-columns:1fr .82fr;gap:24px;align-items:start}.variantSection,.purchaseBox{border:1px solid #ffffff12!important;border-radius:18px;background:#0b0e13;padding:25px!important}.variantSection{margin:0}.variantSection>h2,.purchaseBox h2{font-size:22px}.variantSection>p{color:#8b939e}.variants{margin-top:16px}.variant{min-height:68px;border-radius:11px;background:#080b10}.purchaseBox{position:sticky;top:145px}.purchaseBox>strong{font-size:34px}.paymentMini{margin-top:18px;padding-top:18px;border-top:1px solid #ffffff10;display:flex;gap:10px;align-items:center;color:#9a8cff}.paymentMini span{display:grid;gap:3px}.paymentMini small{color:#8b939e}.clickableCard{cursor:pointer}.cardBody>button{background:#f0f1f4;color:#090b0f;border:0}.cardBody>button:hover{background:white}.detailSection .grid .card{min-width:0}@media(max-width:700px){header{height:64px;padding:0 14px}.categoryBar{top:64px;padding:10px 14px;gap:20px}.topNotice{font-size:10px}.actions>button:not(.bag):not(.login){display:none}.actions .login span{display:none}.actions .login{padding:9px}.productHero{display:grid;grid-template-columns:1fr}.detailVisual{aspect-ratio:1/1}.productCommerce{grid-template-columns:1fr;gap:12px;margin-top:18px}.variantSection,.purchaseBox{padding:18px!important;border-radius:14px}.purchaseBox{position:static}.variants{gap:8px}.variant{min-height:64px}.detailInfo h1{margin-bottom:7px}.detailPrice{font-size:27px}.detailSection .grid{grid-template-columns:repeat(2,1fr)}.detailSection .visual{height:135px}.detailSection .cardBody{padding:12px}.detailSection .cardBody h3{font-size:14px;margin-bottom:10px}.detailSection .price strong{font-size:16px}}
 
 .ticketAdminRow{cursor:pointer}.ticketAdminRow:hover{background:#ffffff05}.ticketConversation{display:grid;gap:18px}.ticketConversation>button{width:max-content;background:none;border:0;color:#9c8cff;cursor:pointer}.ticketTitle{display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;border-bottom:1px solid #ffffff12}.ticketTitle h3{margin:0 0 4px}.ticketTitle span{color:#7f8793;font-size:11px}.ticketTitle select{background:#10141c;color:white;border:1px solid #ffffff15;border-radius:9px;padding:9px}.ticketMessages{min-height:260px;max-height:520px;overflow:auto;padding:12px;background:#080b10;border-radius:14px;display:flex;flex-direction:column;gap:10px}.ticketBubble{max-width:78%;align-self:flex-start;background:#171b23;padding:11px 13px;border-radius:4px 14px 14px 14px}.ticketBubble.adminBubble{align-self:flex-end;background:#5946c4;border-radius:14px 4px 14px 14px}.ticketBubble p{margin:0 0 6px;white-space:pre-wrap}.ticketBubble small{font-size:9px;color:#aab0ba}.ticketReply{display:grid;grid-template-columns:1fr auto;gap:10px}.ticketReply textarea{background:#090c11;color:white;border:1px solid #ffffff15;border-radius:10px;padding:12px;resize:vertical}.ticketReply button{border:0;border-radius:10px;background:#705bf0;color:white;padding:0 20px;font-weight:800}@media(max-width:650px){.ticketTitle{align-items:flex-start;gap:10px}.ticketReply{grid-template-columns:1fr}.ticketReply button{padding:13px}.ticketBubble{max-width:90%}}
+
+/* Nexium storefront refinement — reference-inspired, original identity */
+:root{--nx-surface:#0b0d12;--nx-line:#ffffff12;--nx-muted:#9299a5;--nx-accent:#7b61ff}
+.site main{width:100%}
+.site header{max-width:none}
+.hero{min-height:440px;padding-top:82px}
+.hero h1{max-width:760px}
+.hero p{max-width:560px}
+.catalog{max-width:1440px;margin:auto}
+.productSection{scroll-margin-top:145px}
+.sectionTitle{border-bottom:1px solid var(--nx-line);padding-bottom:15px}
+.card{border-radius:12px;background:#0d1015;box-shadow:none}
+.card:hover{transform:translateY(-2px);border-color:#7b61ff70}
+.visual{height:210px;background:#11141a}
+.cardBody h3{font-size:15px;min-height:38px}
+.cardBody>button{height:42px;border-radius:8px}
+.detailVisual{background:#10131a;border:1px solid var(--nx-line);border-radius:14px}
+.productCommerce{grid-template-columns:minmax(0,1fr) 390px}
+.variantSection,.purchaseBox{border-radius:12px!important}
+.variant{border-radius:9px}
+.buyNow,.addCart{border-radius:9px}
+.buyNow{background:#fff}
+.addCart{background:#20242c;border:1px solid #ffffff12}
+.descriptionBox{border-radius:12px;background:#11141a}
+.cartDrawer{background:#090b10}
+.orderSummary,.checkoutGrid>section{border-radius:12px}
+@media(max-width:650px){
+ .topNotice{min-height:30px}
+ .hero{min-height:390px;padding-top:58px}
+ .hero h1{font-size:38px}
+ .hero p{line-height:1.55}
+ .catalog{padding-top:34px}
+ .sectionTitle{margin-bottom:14px}
+ .sectionTitle h2{font-size:21px}
+ .grid{gap:8px}
+ .card{border-radius:10px}
+ .visual{height:auto;aspect-ratio:1/1}
+ .cardBody{padding:10px}
+ .cardBody h3{font-size:13px;min-height:32px}
+ .cardBody>button{height:36px;border-radius:7px}
+ .productCommerce{display:flex;flex-direction:column}
+ .variantSection,.purchaseBox{width:100%}
+ .purchaseBox{order:2}
+}
