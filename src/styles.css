@@ -212,3 +212,9 @@ input:focus{border-color:#77797e!important;box-shadow:0 0 0 2px #ffffff0b!import
  .price strong{font-size:16px!important}
  .price small{font-size:9px!important}
 }
+
+
+/* Product detail media: match 16:9 product artwork without letterboxing */
+.detailVisual{aspect-ratio:16/9!important;height:auto!important;min-height:0!important}
+.detailVisual img{display:block!important;width:100%!important;height:100%!important;object-fit:cover!important}
+@media(max-width:700px){.detailVisual{aspect-ratio:16/9!important;width:100%!important}}
