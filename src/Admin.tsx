@@ -1,7 +1,7 @@
 import {useEffect,useState} from 'react';import{LogOut,Plus,Trash2,Package,ArrowLeft}from'lucide-react';import{supabase}from'./lib/supabase';
 type Cat={id:string;name:string};type P={id:string;name:string;price:number;active:boolean;categories?:{name:string}|null};
 export default function Admin(){
- const client=supabase;
+ const client=supabase!;
  const[email,setEmail]=useState('');const[password,setPassword]=useState('');const[user,setUser]=useState<any>(null);const[role,setRole]=useState('');const[cats,setCats]=useState<Cat[]>([]);const[items,setItems]=useState<P[]>([]);const[msg,setMsg]=useState('');const[form,setForm]=useState({name:'',price:'',category_id:'',description:'',image_url:'',automatic_delivery:true});
  const load=async()=>{if(!client)return;const{data:{user}}=await client.auth.getUser();setUser(user);if(!user)return;const{data:p}=await client.from('profiles').select('role').eq('id',user.id).single();setRole(p?.role||'customer');if(p?.role==='admin'){const[{data:c},{data:i}]=await Promise.all([client.from('categories').select('id,name').order('name'),client.from('products').select('id,name,price,active,categories(name)').order('created_at',{ascending:false})]);setCats((c||[]) as Cat[]);setItems((i||[]) as unknown as P[])}};
  useEffect(()=>{load()},[]);
