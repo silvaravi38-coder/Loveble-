@@ -218,3 +218,18 @@ input:focus{border-color:#77797e!important;box-shadow:0 0 0 2px #ffffff0b!import
 .detailVisual{aspect-ratio:16/9!important;height:auto!important;min-height:0!important}
 .detailVisual img{display:block!important;width:100%!important;height:100%!important;object-fit:cover!important}
 @media(max-width:700px){.detailVisual{aspect-ratio:16/9!important;width:100%!important}}
+
+
+/* Nexium product-card image/layout fix 2026-10-03 */
+.card .visual{aspect-ratio:16/9!important;height:auto!important;min-height:0!important;width:100%!important;background:#0b0d11!important}
+.card .productImage{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:contain!important;object-position:center!important;background:#0b0d11!important}
+@media(max-width:700px){
+ .catalog{padding-left:14px!important;padding-right:14px!important}
+ .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px 10px!important}
+ .card{min-width:0!important;width:100%!important}
+ .card .visual{aspect-ratio:16/9!important;height:auto!important}
+ .card .productImage{object-fit:contain!important}
+ .cardBody{padding:10px 2px 14px!important}
+ .cardBody h3{font-size:13px!important;min-height:0!important;margin:0 0 12px!important;overflow-wrap:anywhere}
+ .price{margin-bottom:0!important}
+}
