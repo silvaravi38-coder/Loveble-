@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';import{LogOut,Plus,Trash2,Package,ArrowLeft,LayoutDashboard,ShoppingCart,Users,Star,TicketPercent,Settings,Boxes,Headphones,Image,Tags}from'lucide-react';import{supabase}from'./lib/supabase';
+import {useEffect,useState} from 'react';import{LogOut,Plus,Trash2,Package,ArrowLeft,LayoutDashboard,ShoppingCart,Users,Star,TicketPercent,Settings,Boxes,Headphones,Image,Tags,Wallet}from'lucide-react';import{supabase}from'./lib/supabase';
 type Cat={id:string;name:string};type P={id:string;name:string;price:number;active:boolean;category_id?:string|null;description?:string|null;requirements?:string|null;warranty_policy?:string|null;image_url?:string|null;automatic_delivery?:boolean;categories?:{name:string}|null};type V={id:string;product_id:string;name:string;price:number;stock:number;active:boolean};
 export default function Admin(){
  const client=supabase!;
