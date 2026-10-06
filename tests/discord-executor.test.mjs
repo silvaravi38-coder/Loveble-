@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planStructure, templateStructure } from '../supabase/functions/discord-executor/planner.ts';
 import { discordGet } from '../supabase/functions/discord-executor/discord.ts';
+import { describeBotAccess } from '../supabase/functions/discord-executor/permissions.ts';
 
 const snapshot = { guild: { id: '10000000000000000', name: 'Nexium' }, channels: [
   { id: 'cat', name: 'INFORMAÇÕES', type: 4 }, { id: 'welcome', name: 'boas-vindas', type: 0, parent_id: 'cat' },
@@ -74,4 +75,19 @@ test('network failures and rate limiting have bounded attempts', async () => {
   await assert.rejects(discordGet('/guilds/123', 'x', async () => {}, async () => { calls++; throw new Error('network'); }, async () => {}), { code: 'DISCORD_NETWORK' });
   assert.equal(calls, 3);
   await assert.rejects(discordGet('/guilds/123', 'x', async () => {}, async () => Response.json({ retry_after: 90 }, { status: 429 }), async () => assert.fail('must not wait')), { code: 'DISCORD_RATE_LIMIT' });
+});
+test('bot permissions do not bypass protected role hierarchy', () => {
+  const roles = [
+    { id: 'guild', name: '@everyone', position: 0, permissions: '0' },
+    { id: 'bot', name: 'Nexus bot', position: 1, permissions: '268553232', managed: true },
+    { id: 'client', name: 'Cliente', position: 2, permissions: '0' },
+    { id: 'support', name: 'Suporte', position: 1, permissions: '0' },
+  ];
+  const p = describeBotAccess('guild', roles, ['bot']);
+  assert.equal(p.manage_roles, true); assert.equal(p.manage_channels, true);
+  assert.equal(p.customer_role_manageable, false); assert.equal(p.support_role_manageable, false);
+  roles[1].position = 3;
+  assert.equal(describeBotAccess('guild', roles, ['bot']).customer_role_manageable, true);
+  roles[1].permissions = '8'; roles[1].position = 1;
+  assert.equal(describeBotAccess('guild', roles, ['bot']).customer_role_manageable, false);
 });
