@@ -9,7 +9,7 @@ import {lockOverwrites,canonicalOverwrites} from '../supabase/functions/discord-
 import {authorisedOrderContext} from '../supabase/functions/discord-interactions/ai.ts';
 import {scheduledDate} from '../supabase/functions/discord-interactions/schedules.ts';
 import {sendScheduled} from '../supabase/functions/discord-scheduler/worker.ts';
-import {discord} from '../supabase/functions/discord-interactions/api.ts';
+import {discord,fortalezaMonthStart} from '../supabase/functions/discord-interactions/api.ts';
 test('Discord manifest conforms to command limits and keeps mandatory options before optional',()=>{
  const names=new Set();let count=0;
  for(const c of nexiumCommands){assert(!names.has(c.name));names.add(c.name);assert(c.options.length<=25);for(const s of c.options){count++;assert.match(s.name,/^[a-z0-9-]{1,32}$/);assert(s.description.length<=100);assert(s.options.length<=25);let optional=false;for(const o of s.options){if(o.required)assert.equal(optional,false,`${s.name}:${o.name}`);else optional=true;}}}
@@ -57,3 +57,5 @@ test('empty automatic inventory prevents provider charge even with configured cr
  const db={from(){return{select(){return this},eq(){return this},maybeSingle:async()=>({data:{pix_enabled:true,pix_provider:'turbofypay'},error:null})}},rpc:async()=>({data:null,error:{message:'OUT_OF_STOCK'}})};
  try{await assert.rejects(()=>startPurchase(db,{id:'interaction',guild_id:'guild',channel_id:'channel'},'customer','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='OUT_OF_STOCK');assert.equal(calls,0);}finally{globalThis.Deno=previousDeno;globalThis.fetch=previousFetch;}
 });
+
+test('help lists the published commands and support month respects Fortaleza at UTC boundary',async()=>{const help=await route({}, {type:2,data:{name:'nexium',options:[{name:'ajuda'}]}},'user');assert.match(help.content,/agendar/);assert.match(help.content,/cancelar/);assert.match(help.content,/resumo/);assert(help.content.length<=2000);assert.equal(fortalezaMonthStart(new Date('2026-11-01T01:00:00Z')).toISOString(),'2026-10-01T03:00:00.000Z');});

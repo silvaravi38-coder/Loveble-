@@ -1,5 +1,6 @@
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
-import {BotError,checked,actorFor,discord,productFor,uuid,snowflake,safeText,audit} from './api.ts';
+import {BotError,checked,actorFor,discord,productFor,uuid,snowflake,safeText,audit,fortalezaMonthStart} from './api.ts';
+import {nexiumCommands} from '../discord-executor/commands.ts';
 import {privateMessage,orderMessage} from './security.ts';
 import {catalogue,productDetails,publishPanel} from './catalog.ts';
 import {startPurchase,paymentStatus,reconcilePayment} from './payments.ts';
@@ -68,7 +69,7 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
   return privateMessage(`Receita (${report.period}): ${format(report.revenue)} • ${report.orders} pedidos\nTicket médio: ${format(report.average)}\nSite: ${report.site_orders} • Discord: ${report.discord_orders}\nCustos registrados: ${format(report.recorded_costs)} • taxas: ${format(report.recorded_fees)}\nLucro dos pedidos conciliados: ${format(report.net_reconciled)}\nPedidos sem custos/taxas conciliados: ${report.unreconciled_orders}\nMais vendidos:\n`+report.top_products.map((p:any)=>`• ${safeText(p.product_name,90)}: ${p.quantity}`).join('\n'));
  }
  if(sub==='suportes'){
-  const start=new Date();start.setUTCDate(1);start.setUTCHours(3,0,0,0);
+  const start=fortalezaMonthStart();
   const staff=checked(await db.from('profiles').select('id,full_name').eq('role','support')) as any[];
   const lines=[];for(const s of staff){const resolved=await db.from('support_tickets').select('id',{count:'exact',head:true}).eq('resolved_by',s.id).eq('status','resolved').gte('resolved_at',start.toISOString());const claimed=await db.from('support_ticket_claims').select('id',{count:'exact',head:true}).eq('support_id',s.id).gte('claimed_at',start.toISOString());if(resolved.error||claimed.error)throw new BotError('DATABASE_ERROR');lines.push(`${safeText(s.full_name,80)}: ${claimed.count||0} assumidos, ${resolved.count||0} resolvidos • R$ ${(Math.floor((resolved.count||0)/30)*10).toFixed(2)}`);}
   return privateMessage(lines.join('\n')||'Nenhum suporte cadastrado no site.');
@@ -106,7 +107,7 @@ export async function route(db:SupabaseClient,input:any,userId:string) {
  }
  if(command!=='nexium')throw new BotError('UNSUPPORTED_ACTION');
  if(sub==='teste')return {...privateMessage('Nexium conectado. Catálogo, pedidos, PIX e suporte disponíveis. Use /nexium ajuda.'),components:[{type:1,components:[{type:2,style:1,label:'Meus pedidos',custom_id:'nexium:my-orders:v1'}]}]};
- if(sub==='ajuda')return privateMessage('/nexium catalogo • produto • comprar • pagamento • pedidos • entrega • suporte • vincular\n/ticket abrir • listar • ver • mensagem • assumir • transferir • prioridade • finalizar • avaliar • transcript • adicionar • remover\n/nexium-admin painel • painel-tickets • paineis • sincronizar • despublicar • configurar • estoque • restock • cupom • financeiro • custos • reconciliar • suportes • scan • preview • backup • aplicar • lock • unlock\nAções de staff/admin exigem conta vinculada e cargo autorizado no site.');
+ if(sub==='ajuda')return privateMessage(nexiumCommands.map(c=>`/${c.name}: ${c.options.map(s=>s.name).join(' • ')}`).join('\n')+'\nAções de staff/admin exigem conta vinculada e perfil autorizado na loja.');
  if(sub==='vincular')return privateMessage('Abra https://nexium-store.vercel.app → Minha conta → Conectar minha conta Discord.');
  if(sub==='pedidos')return orders(db,userId);
  if(sub==='catalogo')return catalogue(db);

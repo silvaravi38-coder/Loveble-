@@ -7,7 +7,8 @@ do $$ declare ord uuid;prod uuid;begin
  insert into public.discord_checkout_requests(interaction_id,order_id,discord_user_id,guild_id,product_id) values('rls-fixture',ord,'999999999999999997','999999999999999990',prod);
 end $$;
 set local role authenticated;
-do $$ begin
+do $$ declare touched integer;begin
+ update public.profiles set role='admin' where id=auth.uid();get diagnostics touched=ROW_COUNT;if touched<>0 then raise exception 'customer can elevate own profile';end if;
  if exists(select from public.discord_ai_settings) or exists(select from public.discord_order_finance) or exists(select from public.discord_checkout_requests) or exists(select from public.discord_ticket_transcripts) or exists(select from public.discord_ai_runs) or exists(select from public.discord_channel_controls) or exists(select from public.discord_scheduled_messages) then raise exception 'customer can read protected bot data';end if;
  if has_function_privilege('authenticated','public.discord_finance_report(uuid,text)','execute') or has_function_privilege('authenticated','public.discord_restock(text,text,uuid,text[],text)','execute') or has_function_privilege('authenticated','public.discord_complete_ai(uuid,text,integer)','execute') or has_function_privilege('authenticated','public.discord_scheduler_tick()','execute') then raise exception 'backend callable by customer';end if;
  if has_table_privilege('authenticated','public.discord_scheduler_auth','select') then raise exception 'scheduler credential readable';end if;

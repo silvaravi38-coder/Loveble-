@@ -6,6 +6,7 @@ Atualizado em 06/10/2026. Aplicação 1557132199227031552, servidor 155504565863
 
 - `/nexium teste`, botão Meus pedidos e `/nexium pedidos` foram executados pelo usuário no Discord e mostraram os pedidos reais em resposta privada; screenshot e eventos do banco confirmaram o fluxo original.
 - 48 subcomandos em três grupos registrados somente no servidor Nexium Store. A ativação 39293d9e-22e0-4138-957c-f088b2bdbdcf terminou `succeeded`; a API do Discord foi consultada novamente para conferir os IDs e o endpoint assinado.
+- GitHub main atualizado; Vercel confirmou builds bem-sucedidos. O domínio público foi consultado por HTTP; estilos conferidos com o build local.
 - Supabase: discord-executor, discord-interactions, discord-payment-webhook e discord-scheduler publicados; OAuth existente preservado. Os registros das versões finais estão no histórico das Functions.
 - Scan real eb098f77-970b-4ef3-96bb-73ca008c3d68: 12 categorias, 55 canais, 16 cargos. Snapshot 91ed6c79-ebb2-4bb3-b033-dfc15a7a6c0b. Nenhum canal/cargo existente foi apagado, movido ou reconfigurado durante essa verificação.
 - Cliente e Suporte existentes são reutilizados; o scan confirmou que estão abaixo do cargo mais alto do bot. PIX Discord e concessão do cargo Cliente configurados no backend.
@@ -58,10 +59,10 @@ Staff/admin precisam de conta Discord vinculada ao perfil autorizado na loja. A 
 
 ## Testes e segurança
 
-- 34 testes Node passaram: assinaturas/replay, identidade, limites da API, hierarquia, preservação de permissões, manifest dos comandos, estoque vazio sem chamada ao provedor, modal privado, QR multipart, acesso administrativo e envio incerto sem retry.
+- 35 testes Node passaram: assinaturas/replay, identidade, limites da API, hierarquia, preservação de permissões, manifest dos comandos, estoque vazio sem chamada ao provedor, modal privado, QR multipart, acesso administrativo e envio incerto sem retry.
 - Check TypeScript estrito dos cinco backends e build do frontend passaram. SDK da IA importado exclusivamente no backend; bundle público não inclui a credencial.
 - Testes SQL reais com rollback: reserva/idempotência/origem, valor divergente, entrega única, monotonicidade do pagamento, estoque liberado e revendido, autorização do staff, cancelamento sem remuneração, avaliação, financeiro autorizado e pausa da IA após assumir.
-- Teste RLS com papel authenticated e fixture real: cliente não leu dados protegidos nem executou RPCs backend; Vault inacessível. Papel anon manteve acesso ao catálogo público e perdeu acesso a RPCs de staff.
+- Teste RLS com papel authenticated e fixture real: cliente não conseguiu elevar o próprio perfil, ler dados protegidos nem executar RPCs backend; Vault inacessível. Papel anon manteve acesso ao catálogo público e perdeu acesso a RPCs de staff.
 - Revisão legada retirou 13 grants anônimos de RPCs de staff/fornecedor/triggers; corrigiu checagem de papel nulo em pagamento de suporte. `is_admin()` continua disponível para políticas públicas e retorna somente booleano da sessão.
 - Advisors: um alerta anon remanescente (`is_admin`, necessário às políticas), 15 SECURITY DEFINER autenticados legados que exigem revisão por função, proteção de senhas vazadas desativada. Tabela da capability tem RLS e nenhum grant ao cliente: ausência de policy é intencional. Nenhuma nova RPC de negócio foi exposta a anon/authenticated.
 - Referências de correção: [grants SECURITY DEFINER](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable), [proteção de senhas](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).

@@ -27,3 +27,5 @@ export async function productFor(db:SupabaseClient,term:string) {
  const candidates=exact.length?exact:products.filter(p=>p.name.toLowerCase().includes(term.toLowerCase()));
  if(candidates.length!==1)throw new BotError(candidates.length?'AMBIGUOUS_PRODUCT':'PRODUCT_UNAVAILABLE');return candidates[0];
 }
+
+export function fortalezaMonthStart(now=new Date()){const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Fortaleza',year:'numeric',month:'2-digit'}).formatToParts(now);const year=parts.find(p=>p.type==='year')!.value,month=parts.find(p=>p.type==='month')!.value;return new Date(`${year}-${month}-01T00:00:00-03:00`);}
