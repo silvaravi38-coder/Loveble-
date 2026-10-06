@@ -1,4 +1,4 @@
-import {ticketControls} from './ticket-ui.ts';
+import {ticketCard,refreshTicketCard} from './ticket-card.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,discord,actorFor,uuid,snowflake,safeText,row,button} from './api.ts';
 import {ticketAi} from './ai.ts';
@@ -14,8 +14,9 @@ export async function ticketRpc(db:SupabaseClient,user:string,guild:string,actio
 }
 export async function openTicket(db:SupabaseClient,input:any,user:string,reason:string,order?:string) {
  if(order&&!uuid(order))throw new BotError('INVALID_ID');
- await actorFor(db,user);
+ const actor=await actorFor(db,user);
  const created=await ticketRpc(db,user,input.guild_id,'open',null,{reason:reason.trim(),order_id:order||null,interaction_id:input.id});
+ checked(await db.from('support_messages').insert({ticket_id:created.ticket_id,sender_id:actor.id,sender_role:actor.role,sender_name:actor.full_name,message:reason}));
  const config=checked(await db.from('discord_bot_settings').select('category_support_id,role_support_id,role_manager_id').eq('guild_id',input.guild_id).maybeSingle());
  const mappings=checked(await db.from('discord_resource_mappings').select('logical_key,discord_id').eq('guild_id',input.guild_id).in('logical_key',['role:suporte','role:gerente'])) as any[];
  const staff=[config?.role_support_id,config?.role_manager_id,...mappings.map(r=>r.discord_id)].filter((id,index,all)=>id&&all.indexOf(id)===index);
@@ -26,11 +27,14 @@ export async function openTicket(db:SupabaseClient,input:any,user:string,reason:
   const channel=await discord(`/guilds/${input.guild_id}/channels`,'POST',{name:`ticket-${created.ticket_id.slice(0,8)}`,type:0,...(config?.category_support_id?{parent_id:config.category_support_id}:{}),permission_overwrites:overwrites,topic:`Nexium ticket ${created.ticket_id}`});
   createdChannel=channel.id;
   checked(await db.from('discord_tickets').update({channel_id:channel.id,channel_state:'ready'}).eq('ticket_id',created.ticket_id));
-  await discord(`/channels/${channel.id}/messages`,'POST',{content:`Atendimento Nexium #${created.ticket_id.slice(0,8)}\nMotivo: ${safeText(reason,500)}\nUse /ticket mensagem para registrar uma mensagem no painel da loja.`,allowed_mentions:{parse:[]},components:ticketControls(created.ticket_id)});
+  const ticket=checked(await db.from('support_tickets').select('*').eq('id',created.ticket_id).single());
+  const payload=ticketCard(created.ticket_id,{...ticket,subject:reason},input.member.user,null,config?.role_support_id);
+  const welcome=await discord(`/channels/${channel.id}/messages`,'POST',{...payload,content:`<@${user}>${config?.role_support_id?` • <@&${config.role_support_id}>`:''}`,allowed_mentions:{parse:[],users:[user],roles:config?.role_support_id?[config.role_support_id]:[]}});
+  checked(await db.from('discord_tickets').update({card_message_id:welcome.id}).eq('ticket_id',created.ticket_id));
   return privateMessage(`Ticket aberto: <#${channel.id}>\nID: ${created.ticket_id}\nSeu atendimento também está registrado no suporte da loja.`);
  }catch(error){await db.from('discord_tickets').update({...(createdChannel?{channel_id:createdChannel}:{}),channel_state:createdChannel||error instanceof BotError&&error.code==='MUTATION_UNCERTAIN'?'uncertain':'failed'}).eq('ticket_id',created.ticket_id);throw error;}
 }
-async function captureTranscript(db:SupabaseClient,id:string,channelId:string,actorId:string) {
+export async function captureTranscript(db:SupabaseClient,id:string,channelId:string,actorId:string) {
  const messages:any[]=[];let before:string|undefined;let complete=false;
  for(let page=0;page<10;page++){
   const batch=await discord(`/channels/${channelId}/messages?limit=100${before?`&before=${before}`:''}`) as any[];
@@ -71,6 +75,7 @@ export async function actTicket(db:SupabaseClient,input:any,userId:string,action
  if((action==='claim'||action==='transfer')&&channelId)await discord(`/channels/${channelId}/permissions/${action==='claim'?userId:options.target}`,'PUT',{type:1,allow:'117760',deny:'0'});
  if(action==='message'&&channelId)await discord(`/channels/${channelId}/messages`,'POST',{content:`${safeText(actor.full_name,100)}: ${safeText(options.text,1800)}`,allowed_mentions:{parse:[]}});
  if(action==='message'&&actor.role!=='admin'&&actor.role!=='support'){try{await ticketAi(db,userId,input.guild_id,id,'reply');}catch{ /* Disabled, paused or provider failure never prevents staff support. */ }}
+ if(['claim','transfer','priority','close','cancel'].includes(action)){try{await refreshTicketCard(db,result);}catch{/* Ticket state remains authoritative; do not repeat a completed action for a card failure. */}}
  if(action==='claim'){try{const summary=await ticketAi(db,userId,input.guild_id,id,'summary');return {...summary,content:'Atendimento assumido. IA automática pausada.\n'+summary.content};}catch{ /* Claim succeeds even when AI is unavailable. */ }}
  if(action==='add_member')await discord(`/channels/${channelId}/permissions/${options.target}`,'PUT',{type:1,allow:'117760',deny:'0'});
  if(action==='remove_member')await discord(`/channels/${channelId}/permissions/${options.target}`,'DELETE');
@@ -81,6 +86,7 @@ export async function actTicket(db:SupabaseClient,input:any,userId:string,action
   await discord(`/channels/${channelId}/messages`,'POST',{content:`Atendimento encerrado: ${safeText(options.reason,500)}\nResultado: ${action==='cancel'?'cancelled':options.outcome}. Para avaliar, use /ticket avaliar.`,allowed_mentions:{parse:[]}});
  }
  if(action==='transcript'){
+  if(channelId&&!view.discord.deleted_at)await captureTranscript(db,id,channelId,actor.id);
   const transcript=checked(await db.from('discord_ticket_transcripts').select('messages,complete').eq('ticket_id',id).maybeSingle());
   const siteMessages=checked(await db.from('support_messages').select('sender_name,message,created_at').eq('ticket_id',id).order('created_at').limit(20)) as any[];
   const latest=transcript?.messages?.slice(-10)||siteMessages;

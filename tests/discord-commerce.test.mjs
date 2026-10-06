@@ -65,7 +65,7 @@ test('ticket panel selects original Nexium subjects and unpublish removes all co
  const {ticketPanel,ticketControls}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');
  const panel={id:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',name:'Atendimento Nexium'};
  const payload=ticketPanel(panel);assert.equal(payload.components[0].components[0].type,3);assert.equal(payload.components[0].components[0].options.length,4);assert.deepEqual(payload.allowed_mentions.parse,[]);assert.equal(ticketPanel(panel,true).components.length,0);
- const buttons=ticketControls(panel.id).flatMap(r=>r.components);assert.equal(buttons.length,5);for(const b of buttons)assert(b.custom_id.length<=100);assert(buttons.some(b=>b.custom_id.includes('ticket-close')));
+ const buttons=ticketControls(panel.id).flatMap(r=>r.components);assert.equal(buttons.length,7);for(const b of buttons)assert(b.custom_id.length<=100);assert(buttons.some(b=>b.custom_id.includes('ticket-close')));
 });
 test('ticket modal validates current panel message and stale submission cannot create a ticket',async()=>{
  const {ticketModal,submitTicketModal,modalValues}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');
@@ -82,4 +82,26 @@ test('customer cannot open staff finalization form and form audit never stores r
  const {ticketModal}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');const db=actorDb('customer');db.rpc=async()=>({data:{ticket:{status:'open',user_id:'profile'},discord:{channel_id:'channel'}},error:null});
  await assert.rejects(()=>ticketModal(db,{type:3,guild_id:'guild',channel_id:'channel',data:{custom_id:'nexium:ticket-close:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'}},'user'),e=>e.code==='CLAIM_REQUIRED');
  assert.equal(eventAction({type:5,data:{custom_id:'nexium:ticket-finish:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',components:[{value:'PRIVATE'}]}}),'nexium:ticket-finish');
+});
+
+test('ticket card shows real client/staff metadata and closed controls cannot claim again',async()=>{
+ const {ticketCard}=await import('../supabase/functions/discord-interactions/ticket-card.ts');
+ const card=ticketCard('ticket-id',{id:'ticket-id',status:'open',subject:'Ajuda no acesso',created_at:'2026-10-06T23:21:00Z',priority:'normal',order_id:null},{id:'client',username:'cliente',avatar:null},{full_name:'Atendente'},'role');
+ assert.equal(card.embeds[0].fields.find(f=>f.name==='Atendente').value,'Atendente');assert.equal(card.embeds[0].fields.find(f=>f.name==='Cliente').value,'cliente');assert.deepEqual(card.allowed_mentions.parse,[]);assert(card.components.length<=5);
+ const closed=ticketCard('ticket-id',{status:'resolved',subject:'Ajuda',created_at:'2026-10-06T23:21:00Z',priority:'normal'},{id:'client'},null);assert(!closed.components.flatMap(r=>r.components).some(b=>b.custom_id.includes('ticket-claim')));
+});
+test('deletion requires closed bot-created ticket and permission drift changes preview fingerprint',async()=>{
+ const {requireDeletableTicket,channelFingerprint}=await import('../supabase/functions/discord-interactions/ticket-actions.ts');
+ const view={ticket:{id:'id',status:'resolved'},discord:{closed_at:'date',channel_id:'channel',channel_state:'ready'}};
+ const channel={id:'channel',guild_id:'guild',type:0,topic:'Nexium ticket id',permission_overwrites:[{id:'a',allow:'0',deny:'1024'}]};
+ assert.doesNotThrow(()=>requireDeletableTicket(view,channel,'guild'));
+ assert.throws(()=>requireDeletableTicket({...view,discord:{...view.discord,closed_at:null}},channel,'guild'),e=>e.code==='TICKET_CLOSE_BEFORE_DELETE');
+ assert.throws(()=>requireDeletableTicket(view,{...channel,topic:'Another bot ticket'},'guild'),e=>e.code==='PROTECTED_TICKET_CHANNEL');
+ assert.throws(()=>requireDeletableTicket(view,{...channel,guild_id:'other'},'guild'),e=>e.code==='PROTECTED_TICKET_CHANNEL');
+ assert.notEqual(channelFingerprint(channel),channelFingerprint({...channel,permission_overwrites:[]}));
+});
+test('staff cannot create a PIX for themselves from another customer ticket',async()=>{
+ const {ticketActionButton}=await import('../supabase/functions/discord-interactions/ticket-actions.ts');const db=actorDb('admin');db.rpc=async()=>({data:{ticket:{user_id:'customer',order_id:'order'},discord:{channel_id:'channel'}},error:null});
+ await assert.rejects(()=>ticketActionButton(db,{guild_id:'guild',channel_id:'channel'},'staff','ticket-payment','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='TICKET_PAYMENT_OWNER_REQUIRED');
+ const denied=actorDb('customer');denied.rpc=db.rpc;await assert.rejects(()=>ticketActionButton(denied,{guild_id:'guild',channel_id:'channel'},'customer','ticket-staff','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
 });
