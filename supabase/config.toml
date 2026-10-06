@@ -1,0 +1,6 @@
+project_id = "flcqndjlzuhmxxahjudj"
+
+[functions.discord-executor]
+# The handler validates auth.getUser(jwt) and the stored profiles.role for all operations.
+# Only GET ?health=1 (boolean readiness) and CORS OPTIONS are public.
+verify_jwt = false
