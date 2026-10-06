@@ -7,3 +7,6 @@ verify_jwt = false
 
 [functions.discord-oauth]
 verify_jwt = false
+
+[functions.discord-interactions]
+verify_jwt = false

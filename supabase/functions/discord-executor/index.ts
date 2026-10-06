@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { discordGet, ExecutorError } from './discord.ts';
 import { planStructure, templateStructure, type Snapshot, type Strategy } from './planner.ts';
+import { connectRuntime } from './runtime.ts';
 import { describeBotAccess } from './permissions.ts';
 import { requireCreatePlan, createPayload, discordCreate } from './apply.ts';
 
@@ -26,6 +27,7 @@ Deno.serve(async (req: Request) => {
     if (text.length > 4096) throw new ExecutorError('PAYLOAD_TOO_LARGE', 413);
     let input; try { input = JSON.parse(text); } catch { throw new ExecutorError('INVALID_JSON'); }
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new ExecutorError('INVALID_INPUT');
+    let actorId: string | undefined; let runtimeTarget: string | undefined;
     let config: Record<string, any>; let action: string; let strategy: Strategy; let expectedApplicationId: string | undefined; let previewJobId: string | undefined;
     const dispatch = req.headers.get('X-Nexium-Job-Capability');
     if (dispatch) {
@@ -34,7 +36,7 @@ Deno.serve(async (req: Request) => {
       const hash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
       const claimed = checked(await db.rpc('discord_claim_dispatch', { p_job_id: input.job_id, p_token_hash: hash })).data;
       if (!claimed) throw new ExecutorError('UNAUTHORIZED', 401);
-      jobId = claimed.id; action = claimed.action; strategy = claimed.input.strategy || 'missing';
+      jobId = claimed.id; actorId = claimed.requested_by; runtimeTarget = claimed.input.target; action = claimed.action; strategy = claimed.input.strategy || 'missing';
       expectedApplicationId = claimed.input.expected_application_id;
       previewJobId = claimed.input.preview_job_id;
       config = checked(await db.from('discord_builder_configs').select('*').eq('id', claimed.config_id).single()).data;
@@ -71,7 +73,12 @@ Deno.serve(async (req: Request) => {
     }
     checked(await db.from('discord_job_logs').insert({ job_id: jobId, level: 'info', code: 'STARTED', details: { action, strategy } }));
     let result: Record<string, unknown>;
-    if (action === 'scan' || action === 'backup') {
+    if (action === 'publish') {
+      if (!actorId || runtimeTarget !== 'runtime_connection') throw new ExecutorError('ACTION_NOT_IMPLEMENTED',409);
+      const token = Deno.env.get('DISCORD_BOT_TOKEN');
+      if (!token) throw new ExecutorError('DISCORD_TOKEN_MISSING',424);
+      result = await connectRuntime(db,config.guild_id,actorId,token);
+    } else if (action === 'scan' || action === 'backup') {
       const token = Deno.env.get('DISCORD_BOT_TOKEN');
       if (!token) throw new ExecutorError('DISCORD_TOKEN_MISSING', 424);
       let peakAttempts = 1;

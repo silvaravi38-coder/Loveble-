@@ -3,7 +3,7 @@ export class ExecutorError extends Error {
   httpStatus: number;
   constructor(code: string, httpStatus = 400) { super(code); this.code = code; this.httpStatus = httpStatus; }
 }
-// Only read operations are implemented in this milestone. No Discord mutation is accepted.
+// Bounded read helper. Mutation handlers implement their own stricter retry policies.
 export async function discordGet(path: string, token: string, onAttempt: (attempt: number) => Promise<void>, fetcher: typeof fetch = fetch, delay = (ms: number) => new Promise(r => setTimeout(r, ms))) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     await onAttempt(attempt);

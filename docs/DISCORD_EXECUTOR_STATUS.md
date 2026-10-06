@@ -71,3 +71,7 @@ Client Secret OAuth2 é diferente de DISCORD_BOT_TOKEN, que já está configurad
 - Ainda implementar mensagens agendadas, boas-vindas, notificações, anti-raid/fake, lock/pânico e auditoria completa.
 
 Não foi declarado o projeto completo nem o sistema de vendas/tickets funcionando.
+
+## Atualização posterior: OAuth e comandos
+
+Client Secret configurado, callback cadastrado e vínculo real da conta Ariel confirmado em 06/10/2026. Comandos registrados. Consulte [DISCORD_INTERACTIONS_STATUS.md](./DISCORD_INTERACTIONS_STATUS.md). Os demais limites e pendências acima continuam aplicáveis.
