@@ -1,3 +1,4 @@
+import {ticketPanel} from './ticket-ui.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,discord,audit,row,button,linkButton,safeText,productFor,uuid} from './api.ts';
 import {applicationId,privateMessage} from './security.ts';
@@ -19,7 +20,7 @@ export async function productDetails(db:SupabaseClient,term:string,panelId?:stri
  return {...privateMessage(`**${safeText(p.name,150)}**\n${safeText(p.description,900)}\nA partir de ${money(p.price)}\n${available?'Disponível':'Sem estoque para entrega automática'}\n${p.requirements?'Requisitos: '+safeText(p.requirements,400):''}`),components};
 }
 export async function panelPayload(db:SupabaseClient,panel:any,disabled=false) {
- if(panel.panel_kind==='tickets')return {content:null,allowed_mentions:{parse:[]},embeds:[{title:safeText(panel.name,200),description:disabled?'Este painel está despublicado.':'Precisa de ajuda? Abra um atendimento privado. Vincule sua conta Nexium para relacionar suas compras.',color:0xe3e5e8}],components:disabled?[]:[row([button('Abrir atendimento',`nexium:ticket-open:${panel.id}`)])]};
+ if(panel.panel_kind==='tickets')return ticketPanel(panel,disabled);
  const ids=panel.product_ids as string[];if(ids.length>25 || !ids.length)throw new BotError('PANEL_PRODUCT_LIMIT');
  const products=checked(await db.from('products').select('id,name,price').eq('active',true).in('id',ids).order('name')) as any[];
  return {content:null,allowed_mentions:{parse:[]},embeds:[{title:safeText(panel.name,200),description:disabled?'Este painel está despublicado.':products.map(p=>`• **${safeText(p.name,120)}** — ${money(p.price)}`).join('\n')||'Nenhum produto disponível.',color:0xe3e5e8,footer:{text:'Nexium Store • Catálogo atualizado pelo backend'}}],components:disabled||!products.length?[]:[row([{type:3,custom_id:`nexium:panel:${panel.id}`,placeholder:'Selecione um produto',options:products.map(p=>({label:safeText(p.name,100),value:p.id,description:`A partir de ${money(p.price)}`}))}])]};

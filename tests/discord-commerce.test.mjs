@@ -59,3 +59,27 @@ test('empty automatic inventory prevents provider charge even with configured cr
 });
 
 test('help lists the published commands and support month respects Fortaleza at UTC boundary',async()=>{const help=await route({}, {type:2,data:{name:'nexium',options:[{name:'ajuda'}]}},'user');assert.match(help.content,/agendar/);assert.match(help.content,/cancelar/);assert.match(help.content,/resumo/);assert(help.content.length<=2000);assert.equal(fortalezaMonthStart(new Date('2026-11-01T01:00:00Z')).toISOString(),'2026-10-01T03:00:00.000Z');});
+
+
+test('ticket panel selects original Nexium subjects and unpublish removes all controls',async()=>{
+ const {ticketPanel,ticketControls}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');
+ const panel={id:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',name:'Atendimento Nexium'};
+ const payload=ticketPanel(panel);assert.equal(payload.components[0].components[0].type,3);assert.equal(payload.components[0].components[0].options.length,4);assert.deepEqual(payload.allowed_mentions.parse,[]);assert.equal(ticketPanel(panel,true).components.length,0);
+ const buttons=ticketControls(panel.id).flatMap(r=>r.components);assert.equal(buttons.length,5);for(const b of buttons)assert(b.custom_id.length<=100);assert(buttons.some(b=>b.custom_id.includes('ticket-close')));
+});
+test('ticket modal validates current panel message and stale submission cannot create a ticket',async()=>{
+ const {ticketModal,submitTicketModal,modalValues}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');
+ const id='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';let rpcCalls=0;
+ const db={from(table){return {select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'profile'}:{id,message_id:'1557132199227031552'},error:null}),single:async()=>({data:{id:'profile',role:'customer'},error:null})}},rpc(){rpcCalls++;throw Error('must not create')}};
+ const input={type:3,guild_id:'guild',channel_id:'channel',message:{id:'1557132199227031552'},data:{custom_id:`nexium:ticket-open:${id}`,values:['payment']}};
+ const modal=await ticketModal(db,input,'user');assert.equal(modal.type,9);assert(modal.data.custom_id.length<=100);assert.equal(modal.data.components[0].component.max_length,450);
+ await assert.rejects(()=>ticketModal(db,{...input,message:{id:'other'}},'user'),e=>e.code==='PANEL_PRODUCT_MISMATCH');
+ const submit={...input,type:5,data:{custom_id:`nexium:ticket-new:${id}:payment:other`,components:[{type:18,component:{custom_id:'reason',value:'Ajuda no pagamento'}}]}};
+ await assert.rejects(()=>submitTicketModal(db,submit,'user'),e=>e.code==='PANEL_PRODUCT_MISMATCH');assert.equal(rpcCalls,0);
+ assert.deepEqual(modalValues({data:{components:[{type:18,component:{custom_id:'outcome',values:['resolved']}}]}}),{outcome:'resolved'});
+});
+test('customer cannot open staff finalization form and form audit never stores reason',async()=>{
+ const {ticketModal}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');const db=actorDb('customer');db.rpc=async()=>({data:{ticket:{status:'open',user_id:'profile'},discord:{channel_id:'channel'}},error:null});
+ await assert.rejects(()=>ticketModal(db,{type:3,guild_id:'guild',channel_id:'channel',data:{custom_id:'nexium:ticket-close:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'}},'user'),e=>e.code==='CLAIM_REQUIRED');
+ assert.equal(eventAction({type:5,data:{custom_id:'nexium:ticket-finish:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',components:[{value:'PRIVATE'}]}}),'nexium:ticket-finish');
+});

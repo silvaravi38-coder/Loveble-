@@ -78,3 +78,13 @@ Backups do Builder são estruturais: não recuperam IDs originais, histórico de
 Falhas definitivas de criação de cobrança antes de registrar payment podem reter reserva para revisão; respostas incertas devem ser conciliadas, não repetidas. Pagamento tardio após estoque já liberado exige entrega manual/revisão. Outbox com resultado incerto requer revisão administrativa; não existe botão para forçar resend inseguro. Filas processam lotes limitados e não prometem envio exato no segundo agendado.
 
 Para conferir agora: `/nexium ajuda`, `/nexium catalogo`, `/nexium-admin estoque`, publicar painéis nos canais escolhidos, abrir/assumir/finalizar ticket de teste e avaliar. Para teste de PIX, cadastrar estoque verdadeiro e usar pagamento real autorizado. IA depende da chave do Gateway; Gateway Discord depende de um processo hospedado e intents adequados.
+
+## Atualização: central de tickets por menu — 06/10/2026
+
+O painel de tickets agora oferece quatro assuntos próprios da Nexium: ajuda com produto, compra/entrega, pagamento PIX e outros assuntos. A seleção abre um modal com motivo obrigatório (até 450 caracteres) e ID completo do pedido opcional. O backend valida novamente painel ativo, servidor, canal e mensagem ao receber o formulário; pedidos continuam sujeitos à propriedade da conta vinculada.
+
+Novos tickets recebem botões Assumir, Detalhes, Transcript, Finalizar (staff) e Cancelar meu ticket. Finalizar exige perfil autorizado e atendente responsável, abre formulário de motivo e resultado real (resolvido, cancelado ou duplicado). Cancelar exige o cliente proprietário. Ambos usam a captura e finalização existentes, preservando o canal e histórico. Só resolvido conta na remuneração. A avaliação permanece em `/ticket avaliar`.
+
+Publicação: executar `/nexium-admin painel-tickets nome:Atendimento Nexium` no canal desejado. Para painéis Nexium já publicados, executar `/nexium-admin sincronizar painel:ID`. Mensagens de outros bots nunca são substituídas. Nenhum painel Nexium estava cadastrado no servidor durante esta revisão; o painel mostrado na imagem pertence a outro aplicativo.
+
+Verificação: 38 testes Node e verificação TypeScript estrita do backend passaram. Supabase `discord-interactions` versão 7 ACTIVE; health retornou 200 e POST sem assinatura retornou 401. O clique real no novo modal e a criação/finalização pelo cliente ainda precisam ser verificados no Discord. Sem alteração de schema/RLS ou frontend nesta atualização. Referência técnica: documentação oficial Discord sobre componentes/modal em https://docs.discord.com/developers/components/reference.

@@ -1,3 +1,4 @@
+import {ticketControls} from './ticket-ui.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,discord,actorFor,uuid,snowflake,safeText,row,button} from './api.ts';
 import {ticketAi} from './ai.ts';
@@ -7,7 +8,7 @@ export async function ticketId(db:SupabaseClient,guild:string,channel:string,val
  const t=checked(await db.from('discord_tickets').select('ticket_id').eq('guild_id',guild).eq('channel_id',channel).maybeSingle());
  if(!t)throw new BotError('TICKET_ID_REQUIRED');return t.ticket_id as string;
 }
-async function ticketRpc(db:SupabaseClient,user:string,guild:string,action:string,id:string|null,data:unknown={}) {
+export async function ticketRpc(db:SupabaseClient,user:string,guild:string,action:string,id:string|null,data:unknown={}) {
  const result=await db.rpc('discord_ticket_action',{p_discord_user_id:user,p_guild_id:guild,p_action:action,p_ticket_id:id,p_data:data});
  if(result.error){const code=String(result.error.message);throw new BotError(['LINK_REQUIRED','ORDER_NOT_OWNED','FORBIDDEN','ALREADY_ASSIGNED','CLAIM_REQUIRED','STAFF_NOT_AUTHORIZED','TICKET_NOT_FOUND','RATING_NOT_ALLOWED','TOO_MANY_OPEN_TICKETS','CLOSE_REASON_REQUIRED'].find(c=>code.includes(c))||'TICKET_ACTION_FAILED');}return result.data;
 }
@@ -25,7 +26,7 @@ export async function openTicket(db:SupabaseClient,input:any,user:string,reason:
   const channel=await discord(`/guilds/${input.guild_id}/channels`,'POST',{name:`ticket-${created.ticket_id.slice(0,8)}`,type:0,...(config?.category_support_id?{parent_id:config.category_support_id}:{}),permission_overwrites:overwrites,topic:`Nexium ticket ${created.ticket_id}`});
   createdChannel=channel.id;
   checked(await db.from('discord_tickets').update({channel_id:channel.id,channel_state:'ready'}).eq('ticket_id',created.ticket_id));
-  await discord(`/channels/${channel.id}/messages`,'POST',{content:`Atendimento Nexium #${created.ticket_id.slice(0,8)}\nMotivo: ${safeText(reason,500)}\nUse /ticket mensagem para registrar uma mensagem no painel da loja.`,allowed_mentions:{parse:[]},components:[row([button('Assumir atendimento',`nexium:ticket-claim:${created.ticket_id}`),button('Ver atendimento',`nexium:ticket-view:${created.ticket_id}`,2)])]});
+  await discord(`/channels/${channel.id}/messages`,'POST',{content:`Atendimento Nexium #${created.ticket_id.slice(0,8)}\nMotivo: ${safeText(reason,500)}\nUse /ticket mensagem para registrar uma mensagem no painel da loja.`,allowed_mentions:{parse:[]},components:ticketControls(created.ticket_id)});
   return privateMessage(`Ticket aberto: <#${channel.id}>\nID: ${created.ticket_id}\nSeu atendimento também está registrado no suporte da loja.`);
  }catch(error){await db.from('discord_tickets').update({...(createdChannel?{channel_id:createdChannel}:{}),channel_state:createdChannel||error instanceof BotError&&error.code==='MUTATION_UNCERTAIN'?'uncertain':'failed'}).eq('ticket_id',created.ticket_id);throw error;}
 }
