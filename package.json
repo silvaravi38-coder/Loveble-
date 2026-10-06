@@ -7,23 +7,24 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "node --test tests/discord-executor.test.mjs tests/discord-apply.test.mjs tests/discord-oauth.test.mjs tests/discord-interactions.test.mjs",
+    "test": "node --test tests/discord-executor.test.mjs tests/discord-apply.test.mjs tests/discord-oauth.test.mjs tests/discord-interactions.test.mjs tests/discord-commerce.test.mjs",
     "check:backend": "node tests/check-discord-backend.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
+    "ai": "^7.0.129",
+    "lucide-react": "^0.468.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "lucide-react": "^0.468.0",
-    "@supabase/supabase-js": "^2.57.4"
+    "typescript": "latest",
+    "vite": "latest"
   },
   "devDependencies": {
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
-    "vite": "^7.1.7",
+    "@vitejs/plugin-react": "^5.0.3",
     "typescript": "^5.9.2",
-    "@vitejs/plugin-react": "^5.0.3"
+    "vite": "^7.1.7"
   }
 }

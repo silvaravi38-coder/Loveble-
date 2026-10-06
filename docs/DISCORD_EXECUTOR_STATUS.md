@@ -75,3 +75,8 @@ Não foi declarado o projeto completo nem o sistema de vendas/tickets funcionand
 ## Atualização posterior: OAuth e comandos
 
 Client Secret configurado, callback cadastrado e vínculo real da conta Ariel confirmado em 06/10/2026. Comandos registrados. Consulte [DISCORD_INTERACTIONS_STATUS.md](./DISCORD_INTERACTIONS_STATUS.md). Os demais limites e pendências acima continuam aplicáveis.
+
+
+## Atualização de comandos e comércio
+
+A expansão atual de catálogo, PIX, tickets, IA, agendamentos e moderação por canal está documentada em [DISCORD_INTERACTIONS_STATUS.md](DISCORD_INTERACTIONS_STATUS.md). Rebuild, restore e reorganização executável continuam bloqueados; a criação existente não foi ampliada para exclusões.
