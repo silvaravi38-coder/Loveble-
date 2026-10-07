@@ -1,6 +1,6 @@
 import {BotError,discord} from './api.ts';
 export function ticketChannelName(reason:string,id:string){
- const subjects:Record<string,string>={'Ajuda com produto':'ajuda-produto','Compra e entrega':'compra-entrega','Pagamento PIX':'pagamento-pix','Outros assuntos':'outros-assuntos'};
+ const subjects:Record<string,string>={'Suporte':'suporte','Dúvida':'duvida','Receber Produto':'receber-produto','Vaga Staff':'vaga-staff','Ajuda com produto':'ajuda-produto','Compra e entrega':'compra-entrega','Pagamento PIX':'pagamento-pix','Outros assuntos':'outros-assuntos'};
  const subject=reason.split(':')[0].trim();
  const slug=subjects[subject]||subject.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60)||'atendimento';
  return `${slug}-${id.slice(0,8)}`;

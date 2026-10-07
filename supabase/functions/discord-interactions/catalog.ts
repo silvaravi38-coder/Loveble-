@@ -20,7 +20,7 @@ export async function productDetails(db:SupabaseClient,term:string,panelId?:stri
  return {...privateMessage(`**${safeText(p.name,150)}**\n${safeText(p.description,900)}\nA partir de ${money(p.price)}\n${available?'Disponível':'Sem estoque para entrega automática'}\n${p.requirements?'Requisitos: '+safeText(p.requirements,400):''}`),components};
 }
 export async function panelPayload(db:SupabaseClient,panel:any,disabled=false) {
- if(panel.panel_kind==='tickets')return ticketPanel(panel,disabled);
+ if(panel.panel_kind==='tickets')return ticketPanel(panel,disabled,await discord(`/guilds/${panel.guild_id}/emojis`));
  const ids=panel.product_ids as string[];if(ids.length>25 || !ids.length)throw new BotError('PANEL_PRODUCT_LIMIT');
  const products=checked(await db.from('products').select('id,name,price,slug,description,image_url,automatic_delivery').eq('active',true).in('id',ids).order('name')) as any[];
  if(products.length===1&&!disabled){

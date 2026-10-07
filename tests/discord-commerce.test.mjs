@@ -64,7 +64,7 @@ test('help lists the published commands and support month respects Fortaleza at 
 test('ticket panel selects original Nexium subjects and unpublish removes all controls',async()=>{
  const {ticketPanel,ticketControls}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');
  const panel={id:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',name:'Atendimento Nexium'};
- const payload=ticketPanel(panel);assert.equal(payload.components[0].components[0].type,2);assert.equal(payload.components[0].components.length,4);assert.match(payload.embeds[0].description,/08:00 às 11:00 e 20:30 às 22:00/);assert.match(payload.embeds[0].description,/10:00 às 21:00/);assert.deepEqual(payload.allowed_mentions.parse,[]);assert.equal(ticketPanel(panel,true).components.length,0);
+ const payload=ticketPanel(panel);assert.equal(payload.components[0].components[0].type,3);assert.deepEqual(payload.components[0].components[0].options.map(s=>s.label),['Suporte','Dúvida','Receber Produto','Vaga Staff']);assert.match(payload.embeds[0].description,/08:00 às 11:00 e 20:30 às 22:00/);assert.match(payload.embeds[0].description,/10:00 às 21:00/);assert.deepEqual(payload.allowed_mentions.parse,[]);assert.equal(ticketPanel(panel,true).components.length,0);
  const buttons=ticketControls(panel.id).flatMap(r=>r.components);assert.equal(buttons.length,7);for(const b of buttons)assert(b.custom_id.length<=100);assert(buttons.some(b=>b.custom_id.includes('ticket-close')));
 });
 test('ticket opening skips modal and stale panels cannot create a ticket',async()=>{
@@ -121,4 +121,11 @@ test('deleted panel messages recover only after a confirmed 404; unpublishing do
  assert.equal((await publishPanelMessage(panel,{},false,request)).id,'replacement');assert.deepEqual(calls,['GET','POST']);calls.length=0;
  assert.equal(await publishPanelMessage(panel,{},true,request),null);assert.deepEqual(calls,['GET']);
  await assert.rejects(()=>publishPanelMessage(panel,{},false,async()=>{throw new BotError('DISCORD_NETWORK')}),e=>e.code==='DISCORD_NETWORK');
+});
+test('ticket menu uses available local server emojis and never foreign or restricted IDs',async()=>{
+ const {ticketPanel}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');
+ const emojis=['suporte','info','package1','55609admingreenCopia','alliancearrows4'].map((name,i)=>({name,id:String(i+1),available:true,roles:[],animated:name==='alliancearrows4'}));
+ const panel=ticketPanel({id:'panel'},false,emojis);const options=panel.components[0].components[0].options;
+ assert.deepEqual(options.map(o=>o.emoji.id),['1','2','3','4']);assert.match(panel.embeds[0].description,/<a:alliancearrows4:5>/);assert(!JSON.stringify(panel).includes('1434217902927646913'));
+ const restricted=ticketPanel({id:'panel'},false,[{name:'suporte',id:'blocked',roles:['role'],available:true}]);assert(!JSON.stringify(restricted).includes('blocked'));
 });

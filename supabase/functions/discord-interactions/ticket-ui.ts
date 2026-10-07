@@ -2,12 +2,18 @@ import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {actorFor,BotError,checked,uuid,row,button,safeText} from './api.ts';
 import {openTicket,actTicket,ticketRpc} from './tickets.ts';
 export const ticketSubjects=[
- {label:'Ajuda com produto',value:'product',description:'Dúvidas, acesso ou funcionamento'},
- {label:'Compra e entrega',value:'delivery',description:'Acompanhar uma compra ou entrega'},
- {label:'Pagamento PIX',value:'payment',description:'Ajuda com pagamento ou confirmação'},
- {label:'Outros assuntos',value:'other',description:'Falar com a equipe Nexium'},
+ {label:'Suporte',value:'support',description:'Clique aqui caso precise de suporte.'},
+ {label:'Dúvida',value:'doubt',description:'Clique aqui caso tenha dúvida.'},
+ {label:'Receber Produto',value:'delivery',description:'Clique aqui para receber seu produto.'},
+ {label:'Vaga Staff',value:'staff',description:'Clique aqui caso deseje ser Staff.'},
 ];
-export function ticketPanel(panel:any,disabled=false){return {content:null,allowed_mentions:{parse:[]},embeds:[{title:'<:1289359625937747989:1434217902927646913> Bem-vindo à Central de Atendimento',description:disabled?'Este painel está despublicado.':'> Para que possamos iniciar o seu atendimento, **__escolha um setor e clique no botão correspondente à área desejada.__**\n\n__**Horário de Atendimento:**__\n\n<:1289362432996806657:1482909862949032206> __Segunda a Sexta__\n<a:alliancearrows4:1434222600367636550> **08:00 às 11:00 e 20:30 às 22:00**\n\n<:1289362432996806657:1482909862949032206> __Sábado__\n<a:alliancearrows4:1434222600367636550> **10:00 às 21:00**\n\nClique nos botões abaixo para continuar:',color:0xe3e5e8,footer:{text:'Nexium Store • Horário de Brasília'}}],components:disabled?[]:[row(ticketSubjects.map(s=>button(s.label,`nexium:ticket-open:${panel.id}:${s.value}`)))]};}
+export function ticketPanel(panel:any,disabled=false,emojis:any[]=[]){
+ const local=(names:string[],fallback:string)=>{const emoji=names.flatMap(name=>emojis.filter(e=>e.available!==false&&!(e.roles?.length)&&e.name.toLowerCase().includes(name)))[0];return emoji?{id:emoji.id,name:emoji.name,animated:!!emoji.animated}:{name:fallback};};
+ const text=(emoji:any)=>emoji.id?`<${emoji.animated?'a':''}:${emoji.name}:${emoji.id}>`:emoji.name;
+ const support=local(['suporte','support','headphone','atendimento'],'🎧'),clock=local(['relogio','clock','time','info'],'🕒'),arrow=local(['seta','arrow','right'],'➡️');
+ const icons=[support,local(['sino','bell','duvida','notify','info'],'🔔'),local(['caixa','box','produto','package'],'📦'),local(['trevo','clover','staff','admingreen','roles1'],'🍀')];
+ return {content:null,allowed_mentions:{parse:[]},embeds:[{title:'Bem-vindo à Central de Atendimento',description:disabled?'Este painel está despublicado.':`${text(support)} **Bem-vindo à Central de Atendimento**\n> Para que possamos iniciar o seu atendimento, **__escolha um setor no menu abaixo.__**\n\n__**Horário de Atendimento:**__\n\n${text(clock)} __Segunda a Sexta__\n${text(arrow)} **08:00 às 11:00 e 20:30 às 22:00**\n\n${text(clock)} __Sábado__\n${text(arrow)} **10:00 às 21:00**\n\nSelecione uma opção abaixo para continuar:`,color:0xe3e5e8,footer:{text:'Nexium Store • Horário de Brasília'}}],components:disabled?[]:[row([{type:3,custom_id:`nexium:ticket-open:${panel.id}`,placeholder:'➡️ Clique aqui para ver as opções',min_values:1,max_values:1,options:ticketSubjects.map((subject,index)=>({...subject,emoji:icons[index]}))}])]};
+}
 
 export function ticketControls(id:string,closed=false){
  if(closed)return [row([button('📄 Transcript',`nexium:ticket-transcript:${id}`,2),button('⭐ Avaliar',`nexium:ticket-rate:${id}`,1),button('🗑️ Deletar',`nexium:ticket-delete:${id}`,4)])];

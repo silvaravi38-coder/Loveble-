@@ -40,7 +40,9 @@ Deno.serve(async (req: Request) => {
       if (!/^[a-f0-9]{64}$/.test(dispatch) || !uuid.test(input.job_id || '')) throw new ExecutorError('UNAUTHORIZED', 401);
       const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(dispatch));
       const hash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
-      const claimed = checked(await db.rpc('discord_claim_dispatch', { p_job_id: input.job_id, p_token_hash: hash })).data;
+      const claimResult = await db.rpc('discord_claim_dispatch', { p_job_id: input.job_id, p_token_hash: hash });
+      if(claimResult.error)throw new ExecutorError('DISPATCH_DATABASE_'+(claimResult.error.code||'UNAVAILABLE'),503);
+      const claimed = claimResult.data;
       if (!claimed) throw new ExecutorError('UNAUTHORIZED', 401);
       jobId = claimed.id; actorId = claimed.requested_by; runtimeTarget = claimed.input.target; action = claimed.action; strategy = claimed.input.strategy || 'missing';
       expectedApplicationId = claimed.input.expected_application_id;
@@ -100,6 +102,7 @@ Deno.serve(async (req: Request) => {
       const bot = await get('/users/@me');
       if (!bot.bot || (expectedApplicationId && bot.id !== expectedApplicationId)) throw new ExecutorError('DISCORD_APPLICATION_MISMATCH', 424);
       const guild = await get(`/guilds/${config.guild_id}`);
+      guild.emojis = await get(`/guilds/${config.guild_id}/emojis`);
       const channels = await get(`/guilds/${config.guild_id}/channels`);
       const roles = await get(`/guilds/${config.guild_id}/roles`);
       const botMember = await get(`/guilds/${config.guild_id}/members/${bot.id}`);
@@ -109,7 +112,7 @@ Deno.serve(async (req: Request) => {
       const bytes = new TextEncoder().encode(JSON.stringify(structure));
       const checksum = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
       const { data: snapshotId } = checked(await db.rpc('discord_save_scan', { p_job_id: jobId, p_structure: structure, p_checksum: checksum }));
-      result = { snapshot_id: snapshotId, checksum, bot_id: bot.id, bot_access: botAccess, guild_name: guild.name, categories: channels.filter((c: { type: number }) => c.type === 4).length, channels: channels.filter((c: { type: number }) => c.type !== 4).length, roles: roles.length, active_threads: structure.active_threads, backup_scope: 'structure_only', archived_threads_included: false, messages_included: false };
+      result = { snapshot_id: snapshotId, checksum, bot_id: bot.id, bot_access: botAccess, guild_name: guild.name, emojis: guild.emojis.map((e:any)=>({id:e.id,name:e.name,animated:e.animated,available:e.available,roles:e.roles})), categories: channels.filter((c: { type: number }) => c.type === 4).length, channels: channels.filter((c: { type: number }) => c.type !== 4).length, roles: roles.length, active_threads: structure.active_threads, backup_scope: 'structure_only', archived_threads_included: false, messages_included: false };
     } else if (action === 'apply') {
       if (!previewJobId || !uuid.test(previewJobId)) throw new ExecutorError('PREVIEW_REQUIRED',409);
       const preview = checked(await db.from('discord_jobs').select('*').eq('id',previewJobId).eq('config_id',config.id).eq('guild_id',config.guild_id).eq('action','preview').eq('status','succeeded').single()).data;
