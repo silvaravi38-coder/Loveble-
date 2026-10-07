@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.57.4';
-import { discordGet, ExecutorError } from './discord.ts';
+import { discordGet, discordCreateMessage, ExecutorError } from './discord.ts';
 import { planStructure, templateStructure, type Snapshot, type Strategy } from './planner.ts';
 import { connectRuntime } from './runtime.ts';
 import { describeBotAccess } from './permissions.ts';
@@ -155,7 +155,19 @@ Deno.serve(async (req: Request) => {
         await publishPanel(db,config.guild_id,channelId,actorId!,panel.id);
         publishedPanels.push({kind:target.kind,channel_id:channelId,panel_id:panel.id});
       }
-      result={created,backup_snapshot_id:backupId,reused:preview.result.operations.filter((o:{action:string})=>o.action==='reuse').length,destructive_operations:0,published_panels:publishedPanels,panel_publication_pending:false};
+      const infoTargets=[
+        {key:'channel:termos',title:'📜 | Termos da Nexium Store',description:'Leia as regras de compra, entrega e garantia informadas em cada produto antes de concluir o pedido. Para dúvidas sobre uma compra, utilize a Central de Atendimento.'},
+        {key:'channel:solicitarproduto',title:'📦 | Solicitar novo produto',description:'Não encontrou o produto que procura? Envie neste canal o nome do produto, plano ou duração desejada. A equipe poderá analisar a solicitação.'},
+        {key:'channel:boasvindas',title:'👋 | Bem-vindo à Nexium Store',description:'Seu universo digital em um só lugar. Confira os produtos disponíveis e utilize a Central de Atendimento quando precisar de ajuda.'},
+      ];
+      const infoMessages:any[]=[];
+      for(const item of infoTargets){
+        const channelId=ids.get(item.key); if(!channelId) continue;
+        const payload={content:null,allowed_mentions:{parse:[]},embeds:[{title:item.title,description:item.description,color:0x5865f2,footer:{text:'Nexium Store'}}]};
+        const message=await discordCreateMessage(channelId,payload,token);
+        infoMessages.push({key:item.key,channel_id:channelId,message_id:message.id});
+      }
+      result={created,backup_snapshot_id:backupId,reused:preview.result.operations.filter((o:{action:string})=>o.action==='reuse').length,destructive_operations:0,published_panels:publishedPanels,published_info_messages:infoMessages,panel_publication_pending:false};
     } else {
       const { data: snapshot } = checked(await db.from('discord_structure_snapshots').select('*').eq('guild_id', config.guild_id).order('created_at', { ascending: false }).limit(1).maybeSingle());
       if (!snapshot || Date.now() - Date.parse(snapshot.created_at) > 600000) throw new ExecutorError('FRESH_SCAN_REQUIRED', 409);
