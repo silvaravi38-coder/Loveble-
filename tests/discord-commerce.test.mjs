@@ -184,3 +184,50 @@ test('command registration honors explicit rate limits without retrying validati
  calls=0;await assert.rejects(()=>registerCommands('app','guild','test-token',definitions,async()=>{calls++;return new Response('{}',{status:400})}),e=>e.code==='COMMAND_REGISTRATION_400_admin');assert.equal(calls,1);
  calls=0;await assert.rejects(()=>registerCommands('app','guild','test-token',definitions,async()=>{calls++;throw Error('timeout')}),e=>e.code==='COMMAND_REGISTRATION_UNCERTAIN_admin');assert.equal(calls,1);
 });
+
+test('botconfig without arguments opens the dashboard without writing settings',async()=>{
+ const reads=[];let writes=0;
+ const db={from(table){reads.push(table);return{select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{pix_enabled:true,role_customer_id:'999999999999999990'},error:null}),single:async()=>({data:{id:'admin',role:'admin',full_name:'Ariel'},error:null}),insert(){writes++;throw Error('must not write')},update(){writes++;throw Error('must not write')}}}};
+ const result=await route(db,{type:2,guild_id:'guild',data:{name:'botconfig'}},'user');
+ assert.match(result.embeds[0].title,/Ariel/);assert.match(result.embeds[0].description,/Abertas/);assert(result.components.flatMap(r=>r.components).some(c=>c.label==='Marketplace'));assert.equal(writes,0);assert(reads.includes('discord_bot_settings'));
+});
+
+test('every botconfig page fits Discord limits and private responses suppress mentions',async()=>{
+ const {botConfigPanel}=await import('../supabase/functions/discord-interactions/bot-config.ts');
+ const db={from(table){return{select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{pix_enabled:true},error:null}),single:async()=>({data:{id:'admin',role:'admin',full_name:'Ariel'},error:null})}}};
+ for(const page of ['home','marketplace','atendimento','definicoes','automacoes','moderacao','rendimento','tools','permissoes']){
+  const result=await botConfigPanel(db,{guild_id:'guild'},'user',page);assert(result.components.length<=5);assert(result.embeds[0].description.length<=4096);assert.deepEqual(result.allowed_mentions.parse,[]);
+  for(const r of result.components){assert(r.components.length<=5);for(const c of r.components){assert((c.custom_id||'').length<=100);if(c.label)assert(c.label.length<=80);}}
+ }
+});
+
+test('configuration controls reject customers, arbitrary fields and malformed selection',async()=>{
+ const {botConfigAction}=await import('../supabase/functions/discord-interactions/bot-config.ts');let calls=0;
+ const execute=async()=>{calls++;return{components:[]}};
+ for(const id of ['tab:home','toggle:pix_enabled:off','set:role_support_id','run:backup'])await assert.rejects(()=>botConfigAction(actorDb('customer'),{data:{custom_id:'nexium:botconfig:'+id,values:['999999999999999990']}},'user',execute),e=>e.code==='FORBIDDEN');
+ await assert.rejects(()=>botConfigAction(actorDb('admin'),{data:{custom_id:'nexium:botconfig:toggle:role:on'}},'user',execute),e=>e.code==='UNSUPPORTED_ACTION');
+ await assert.rejects(()=>botConfigAction(actorDb('admin'),{data:{custom_id:'nexium:botconfig:set:role_support_id',values:['not-a-role']}},'user',execute),e=>e.code==='INVALID_ID');
+ await assert.rejects(()=>botConfigAction(actorDb('admin'),{data:{custom_id:'nexium:botconfig:run:aplicar'}},'user',execute),e=>e.code==='UNSUPPORTED_ACTION');assert.equal(calls,0);
+});
+
+test('configuration changes use explicit desired states and existing validated admin handlers',async()=>{
+ const {botConfigAction}=await import('../supabase/functions/discord-interactions/bot-config.ts');const calls=[];
+ const db={from(table){return{select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{pix_enabled:false},error:null}),single:async()=>({data:{id:'admin',role:'admin',full_name:'Ariel'},error:null})}}};
+ const execute=async(sub,options)=>{calls.push({sub,options});return{components:[]}};
+ await botConfigAction(db,{guild_id:'guild',data:{custom_id:'nexium:botconfig:toggle:pix_enabled:off'}},'user',execute);
+ await botConfigAction(db,{guild_id:'guild',data:{custom_id:'nexium:botconfig:set:role_support_id',values:['999999999999999990']}},'user',execute);
+ assert.deepEqual(calls,[{sub:'configurar',options:{pix:false}},{sub:'configurar',options:{suporte:'999999999999999990'}}]);
+});
+
+test('explicit role settings stay manual and foreign channels cannot be saved',async()=>{
+ const previousFetch=globalThis.fetch,previousDeno=globalThis.Deno;const writes=[];
+ globalThis.Deno={env:{get:()=> 'test-token'}};
+ const db={from(table){return{select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{id:'settings'},error:null}),single:async()=>({data:{id:'admin',role:'admin',full_name:'Ariel'},error:null}),update(data){writes.push(data);return this},insert:async()=>({data:null,error:null}),then(resolve){return Promise.resolve({data:null,error:null}).then(resolve)}}}};
+ try{
+  globalThis.fetch=async()=>new Response(JSON.stringify([{id:'999999999999999990',managed:false}]));
+  await route(db,{type:2,guild_id:'guild',data:{name:'botconfig',options:[{name:'cliente',value:'999999999999999990'}]}},'user');
+  assert.equal(writes[0].role_customer_id,'999999999999999990');assert.equal(writes[0].id_mode,'manual');
+  globalThis.fetch=async()=>new Response(JSON.stringify({guild_id:'other-guild',type:0}));
+  await assert.rejects(()=>route(db,{type:2,guild_id:'guild',data:{name:'botconfig',options:[{name:'logs',value:'999999999999999990'}]}},'user'),e=>e.code==='WRONG_PANEL_CHANNEL');assert.equal(writes.length,1);
+ }finally{globalThis.fetch=previousFetch;globalThis.Deno=previousDeno;}
+});

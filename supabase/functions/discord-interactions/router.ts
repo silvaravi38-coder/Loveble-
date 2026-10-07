@@ -1,3 +1,4 @@
+import {botConfigPanel,botConfigAction} from './bot-config.ts';
 import {ticketSubjects} from './ticket-ui.ts';
 import {ticketActionButton} from './ticket-actions.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
@@ -62,11 +63,13 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
  if(sub==='sincronizar'||sub==='despublicar')return panelJob(db,input.guild_id,actor.id,sub==='despublicar'?'unpublish':'sync',o.painel,()=>publishPanel(db,input.guild_id,input.channel_id,actor.id,o.painel,sub==='despublicar'));
  if(['scan','preview','backup','aplicar'].includes(sub)){if(sub==='aplicar'&&!uuid(o.preview))throw new BotError('INVALID_ID');return executorJob(db,input.guild_id,actor.id,sub==='aplicar'?'apply':sub,o.estrategia||'reuse',o.preview);}
  if(sub==='configurar'){
+  if(!Object.keys(o).length)return botConfigPanel(db,input,userId);
   const data:Record<string,unknown>={guild_id:input.guild_id,updated_by:actor.id};
   for(const [option,field] of [['pix','pix_enabled'],['cargo_cliente_apos_pago','grant_customer_role_on_paid'],['dm_pagamento','dm_customer_on_paid'],['dm_entrega','dm_customer_on_delivery']])if(o[option]!==undefined)data[field]=o[option];
   if(o.logs){const c=await discord(`/channels/${o.logs}`);if(c.guild_id!==input.guild_id||![0,5].includes(c.type))throw new BotError('WRONG_PANEL_CHANNEL');data.channel_logs_id=o.logs;}
   if(o.categoria_tickets){const c=await discord(`/channels/${o.categoria_tickets}`);if(c.guild_id!==input.guild_id||c.type!==4)throw new BotError('INVALID_TICKET_CATEGORY');data.category_support_id=o.categoria_tickets;}
   if(o.cliente||o.suporte){const roles=await discord(`/guilds/${input.guild_id}/roles`);for(const [option,field] of [['cliente','role_customer_id'],['suporte','role_support_id']]){if(o[option]){const role=roles.find((r:any)=>r.id===o[option]);if(!role||role.managed||role.id===input.guild_id)throw new BotError('PROTECTED_ROLE');data[field]=role.id;}}}
+  if(['cliente','suporte','logs','categoria_tickets'].some(key=>o[key]!==undefined))data.id_mode='manual';
   const previous=checked(await db.from('discord_bot_settings').select('id').eq('guild_id',input.guild_id).maybeSingle());
   if(previous)checked(await db.from('discord_bot_settings').update(data).eq('id',previous.id));else checked(await db.from('discord_bot_settings').insert(data));
   await audit(db,input.guild_id,actor.id,'bot_configured',input.guild_id,data);return privateMessage('Configurações salvas. IDs validados no Discord.');
@@ -96,6 +99,7 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
 export async function route(db:SupabaseClient,input:any,userId:string) {
  if(input.type===3){
   const parts=String(input.data.custom_id).split(':');
+  if(String(input.data.custom_id).startsWith('nexium:botconfig:'))return botConfigAction(db,input,userId,(sub,o)=>admin(db,input,userId,sub,o));
   if(input.data.custom_id==='nexium:admin-menu:v1'){const action=input.data.values?.[0];if(!['estoque','paineis','financeiro','configurar'].includes(action))throw new BotError('UNSUPPORTED_ACTION');return admin(db,input,userId,action==='configurar'?'dashboard':action,{});}
   if(input.data.custom_id==='nexium:my-orders:v1')return orders(db,userId);
   if(input.data.custom_id==='nexium:catalog:v1')return productDetails(db,input.data.values?.[0]||'');
