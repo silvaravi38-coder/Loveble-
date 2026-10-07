@@ -111,7 +111,7 @@ test('staff cannot create a PIX for themselves from another customer ticket',asy
 
 test('repeated ticket opening returns the existing channel without a Discord mutation',async()=>{
  const {openTicket}=await import('../supabase/functions/discord-interactions/tickets.ts');
- const db=actorDb('customer');let rpcCalls=0;db.rpc=async()=>{rpcCalls++;return {data:{reused:true,channel_id:'123',ticket_id:'ticket'},error:null};};
+ const db=actorDb('customer');const from=db.from;db.from=table=>table==='discord_tickets'?{select(){return this},eq(){return this},is(){return this},limit:async()=>({data:[],error:null})}:from(table);let rpcCalls=0;db.rpc=async()=>{rpcCalls++;return {data:{reused:true,channel_id:'123',ticket_id:'ticket'},error:null};};
  const message=await openTicket(db,{guild_id:'guild',id:'interaction'},'user','Pagamento PIX');
  assert.equal(rpcCalls,1);assert.match(message.content,/<#123>/);assert.equal(message.components[0].components[0].url,'https://discord.com/channels/guild/123');
 });
@@ -307,4 +307,21 @@ test('payment resolution uses the immutable order credential version before lega
  assert.deepEqual(await resolvePaymentCredentials(db,'guild','order'),{id:'vault-id',secret:'vault-secret'});assert.deepEqual(params,{p_guild:'guild',p_order:'order'});
  const previous=globalThis.Deno;globalThis.Deno={env:{get:name=>name==='TURBOFYPAY_CLIENT_ID'?'legacy-id':'legacy-secret'}};
  try{assert.deepEqual(await resolvePaymentCredentials({rpc:async()=>({data:null,error:null})},undefined,'old-order'),{id:'legacy-id',secret:'legacy-secret'});}finally{globalThis.Deno=previous;}
+});
+
+
+test('ticket recovery releases confirmed missing channels but retains uncertain and forbidden channels',async()=>{
+ const {checkTicketChannel}=await import('../supabase/functions/discord-interactions/ticket-recovery.ts');const {BotError}=await import('../supabase/functions/discord-interactions/api.ts');
+ const calls=[];const db={rpc:async(name,args)=>{calls.push({name,args});return {data:true,error:null};}};const ticket={ticket_id:'ticket',channel_id:'channel',channel_state:'ready'};
+ await checkTicketChannel(db,'owner','guild',ticket,async()=>{throw new BotError('DISCORD_RESOURCE_NOT_FOUND');});assert.equal(calls[0].args.p_reason,'channel_missing');
+ calls.length=0;for(const code of ['DISCORD_PERMISSION_DENIED','DISCORD_NETWORK','DISCORD_RATE_LIMIT'])await assert.rejects(()=>checkTicketChannel(db,'owner','guild',ticket,async()=>{throw new BotError(code)}),e=>e.code===code);assert.equal(calls.length,0);
+ await checkTicketChannel(db,'owner','guild',{...ticket,channel_id:null,channel_state:'uncertain'},async()=>{throw Error('must not probe')});assert.equal(calls.length,0);
+ await checkTicketChannel(db,'owner','guild',{...ticket,channel_id:null,channel_state:'failed'});assert.equal(calls[0].args.p_reason,'creation_failed');
+});
+test('ticket access repair grants only its owner, preserves unrelated permission flags and verifies channel ownership',async()=>{
+ const {ownerTicketOverwrite,checkTicketChannel}=await import('../supabase/functions/discord-interactions/ticket-recovery.ts');
+ const channel={id:'channel',guild_id:'guild',type:0,topic:'Nexium ticket ticket',permission_overwrites:[{id:'owner',type:1,allow:'0',deny:String(1024n|8n)}]};
+ const repair=ownerTicketOverwrite(channel,'owner','guild','ticket');assert.equal(BigInt(repair.allow)&1024n,1024n);assert.equal(BigInt(repair.deny)&1024n,0n);assert.equal(BigInt(repair.deny)&8n,8n);
+ assert.throws(()=>ownerTicketOverwrite({...channel,guild_id:'other'},'owner','guild','ticket'));assert.throws(()=>ownerTicketOverwrite({...channel,topic:'other'},'owner','guild','ticket'));
+ const writes=[];await checkTicketChannel({},'owner','guild',{ticket_id:'ticket',channel_id:'channel'},async(path,method='GET',body)=>{if(method==='GET')return channel;writes.push({path,body});});assert.equal(writes[0].path,'/channels/channel/permissions/owner');
 });

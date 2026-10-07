@@ -1,3 +1,4 @@
+import {recoverOwnerTickets} from './ticket-recovery.ts';
 import {ticketChannelName,deleteClosedTicketChannel} from './ticket-lifecycle.ts';
 import {ticketCard,refreshTicketCard} from './ticket-card.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
@@ -16,6 +17,7 @@ export async function ticketRpc(db:SupabaseClient,user:string,guild:string,actio
 export async function openTicket(db:SupabaseClient,input:any,user:string,reason:string,order?:string) {
  if(order&&!uuid(order))throw new BotError('INVALID_ID');
  const actor=await actorFor(db,user);
+ await recoverOwnerTickets(db,user,actor.id,input.guild_id);
  const created=await ticketRpc(db,user,input.guild_id,'open',null,{reason:reason.trim(),order_id:order||null,interaction_id:input.id});
  if(created.reused)return {...privateMessage(created.channel_id?`🎫 Você já tem um atendimento para este assunto: <#${created.channel_id}>`:'🎫 Este atendimento já foi solicitado. Aguarde ou peça à equipe para revisar a abertura.'),components:created.channel_id?[row([{type:2,style:5,label:'Ir para meu ticket',url:`https://discord.com/channels/${input.guild_id}/${created.channel_id}`}])]:[]};
  checked(await db.from('support_messages').insert({ticket_id:created.ticket_id,sender_id:actor.id,sender_role:actor.role,sender_name:actor.full_name,message:reason}));
