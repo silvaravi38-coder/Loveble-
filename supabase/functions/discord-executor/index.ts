@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.57.4';
-import { discordGet, discordCreateMessage, ExecutorError } from './discord.ts';
+import { discordGet, discordCreateMessage, discordUpdateMessage, ExecutorError } from './discord.ts';
 import { planStructure, templateStructure, type Snapshot, type Strategy } from './planner.ts';
 import { connectRuntime } from './runtime.ts';
 import { describeBotAccess } from './permissions.ts';
@@ -166,7 +166,11 @@ Deno.serve(async (req: Request) => {
       for(const item of infoTargets){
         const channelId=ids.get(item.key); if(!channelId) continue;
         const payload={content:null,allowed_mentions:{parse:[]},embeds:[{title:item.title,description:item.description,color:0x5865f2,footer:{text:'Nexium Store'}}]};
-        const message=await discordCreateMessage(channelId,payload,token);
+        const logicalKey=`panel:${item.key}`;
+        const mapped=checked(await db.from('discord_resource_mappings').select('discord_id').eq('guild_id',config.guild_id).eq('resource_type','message').eq('logical_key',logicalKey).maybeSingle()).data;
+        let message=mapped?.discord_id?await discordUpdateMessage(channelId,mapped.discord_id,payload,token):null;
+        if(!message)message=await discordCreateMessage(channelId,payload,token);
+        checked(await db.from('discord_resource_mappings').upsert({guild_id:config.guild_id,discord_id:message.id,resource_type:'message',logical_key:logicalKey,name:item.title,parent_id:channelId,managed_by_nexium:true,snapshot_id:backupId,last_seen_at:new Date().toISOString()}));
         infoMessages.push({key:item.key,channel_id:channelId,message_id:message.id});
       }
       result={created,backup_snapshot_id:backupId,reused:preview.result.operations.filter((o:{action:string})=>o.action==='reuse').length,destructive_operations:0,published_panels:publishedPanels,published_info_messages:infoMessages,panel_publication_pending:false};
