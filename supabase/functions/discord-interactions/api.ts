@@ -6,7 +6,7 @@ export const safeText=(value:unknown,max=2000)=>String(value??'').replace(/[@`*_
 export async function discord(path:string,method='GET',body?:unknown) {
  const token=Deno.env.get('DISCORD_BOT_TOKEN');if(!token)throw new BotError('DISCORD_TOKEN_MISSING');
  let r:Response;try{r=await fetch(`https://discord.com/api/v10${path}`,{method,headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(8000)});}catch{throw new BotError(method==='GET'?'DISCORD_NETWORK':'MUTATION_UNCERTAIN');}
- if(!r.ok)throw new BotError(r.status===403?'DISCORD_PERMISSION_DENIED':r.status===429?'DISCORD_RATE_LIMIT':r.status>=500&&method!=='GET'?'MUTATION_UNCERTAIN':'DISCORD_API_ERROR');
+ if(!r.ok)throw new BotError(r.status===404?'DISCORD_RESOURCE_NOT_FOUND':r.status===403?'DISCORD_PERMISSION_DENIED':r.status===429?'DISCORD_RATE_LIMIT':r.status>=500&&method!=='GET'?'MUTATION_UNCERTAIN':'DISCORD_API_ERROR');
  return r.status===204?null:r.json();
 }
 export const checked=<T extends {data:any;error:any}>(r:T)=>{if(r.error)throw new BotError('DATABASE_ERROR');return r.data;};

@@ -36,19 +36,26 @@ export async function publishPanel(db:SupabaseClient,guild:string,channelId:stri
   const channel=await discord(`/channels/${panel.channel_id}`);
   if(channel.guild_id!==guild||![0,5].includes(channel.type))throw new BotError('WRONG_PANEL_CHANNEL');
   const payload=await panelPayload(db,panel,unpublish);let message;
-  if(panel.message_id){
-   const existing=await discord(`/channels/${panel.channel_id}/messages/${panel.message_id}`);
-   if(existing.author?.id!==applicationId)throw new BotError('PROTECTED_MESSAGE');
-   message=await discord(`/channels/${panel.channel_id}/messages/${panel.message_id}`,'PATCH',payload);
-  }else{
-   if(unpublish)throw new BotError('PANEL_NOT_PUBLISHED');
-   message=await discord(`/channels/${panel.channel_id}/messages`,'POST',{...payload,nonce:panel.id.replace(/-/g,'').slice(0,24),enforce_nonce:true});
-  }
+  message=await publishPanelMessage(panel,payload,unpublish);
   // Once Discord accepted, any DB failure retains the lock for reconciliation.
-  uncertain=true;
-  checked(await db.from('discord_sales_panels').update({message_id:message.id,active:!unpublish,sync_status:unpublish?'unpublished':'synced',last_synced_at:new Date().toISOString()}).eq('id',panel.id));
-  await audit(db,guild,actorId,unpublish?'panel_unpublished':'panel_synced',panel.id,{channel_id:panel.channel_id,message_id:message.id});
-  uncertain=false;return privateMessage(`Painel ${unpublish?'despublicado':'publicado/sincronizado'}: ${panel.name}\nID: ${panel.id}\nMensagem: https://discord.com/channels/${guild}/${panel.channel_id}/${message.id}`);
+  uncertain=!!message;
+  checked(await db.from('discord_sales_panels').update({message_id:message?.id||panel.message_id,active:!unpublish,sync_status:unpublish?'unpublished':'synced',last_synced_at:new Date().toISOString()}).eq('id',panel.id));
+  await audit(db,guild,actorId,unpublish?'panel_unpublished':'panel_synced',panel.id,{channel_id:panel.channel_id,message_id:message?.id||panel.message_id});
+  uncertain=false;return privateMessage(`Painel ${unpublish?'despublicado':'publicado/sincronizado'}: ${panel.name}\nID: ${panel.id}\nMensagem: https://discord.com/channels/${guild}/${panel.channel_id}/${message?.id||panel.message_id}`);
  }catch(e){if(e instanceof BotError&&e.code==='MUTATION_UNCERTAIN')uncertain=true;throw e;}
  finally{if(!uncertain)await db.from('discord_panel_locks').delete().eq('panel_id',panelId).eq('lease_token',lease);}
+}
+
+// A confirmed 404 is recoverable; network failures and uncertain writes are never retried.
+export async function publishPanelMessage(panel:any,payload:any,unpublish=false,request:typeof discord=discord){
+ if(panel.message_id){
+  let existing;
+  try{existing=await request(`/channels/${panel.channel_id}/messages/${panel.message_id}`);}catch(error){if(!(error instanceof BotError)||error.code!=='DISCORD_RESOURCE_NOT_FOUND')throw error;}
+  if(existing){
+   if(existing.author?.id!==applicationId)throw new BotError('PROTECTED_MESSAGE');
+   return request(`/channels/${panel.channel_id}/messages/${panel.message_id}`,'PATCH',payload);
+  }
+ }
+ if(unpublish)return null;
+ return request(`/channels/${panel.channel_id}/messages`,'POST',{...payload,nonce:panel.id.replace(/-/g,'').slice(0,24),enforce_nonce:true});
 }

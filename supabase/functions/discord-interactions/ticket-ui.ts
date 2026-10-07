@@ -7,7 +7,7 @@ export const ticketSubjects=[
  {label:'Pagamento PIX',value:'payment',description:'Ajuda com pagamento ou confirmação'},
  {label:'Outros assuntos',value:'other',description:'Falar com a equipe Nexium'},
 ];
-export function ticketPanel(panel:any,disabled=false){return {content:null,allowed_mentions:{parse:[]},embeds:[{title:safeText(panel.name,200),description:disabled?'Este painel está despublicado.':'**Central de atendimento Nexium**\nSelecione o assunto e descreva o que precisa. Abriremos um canal privado para você e a equipe.\n\nSe o atendimento for sobre uma compra, informe o ID do pedido no formulário. Sua conta Discord precisa estar vinculada à Nexium.',color:0x5865f2,footer:{text:'Nexium Store • Atendimento com histórico'}}],components:disabled?[]:[row([{type:3,custom_id:`nexium:ticket-open:${panel.id}`,placeholder:'Escolha o assunto do atendimento',min_values:1,max_values:1,options:ticketSubjects}])]};}
+export function ticketPanel(panel:any,disabled=false){return {content:null,allowed_mentions:{parse:[]},embeds:[{title:safeText(panel.name,200),description:disabled?'Este painel está despublicado.':'**Central de atendimento Nexium**\nSelecione o assunto para abrir seu canal privado com a equipe. Descreva o que precisa dentro do ticket.\n\nSe o atendimento for sobre uma compra, informe o ID do pedido dentro do ticket. Sua conta Discord precisa estar vinculada à Nexium.',color:0x5865f2,footer:{text:'Nexium Store • Atendimento com histórico'}}],components:disabled?[]:[row([{type:3,custom_id:`nexium:ticket-open:${panel.id}`,placeholder:'Escolha o assunto do atendimento',min_values:1,max_values:1,options:ticketSubjects}])]};}
 export function ticketControls(id:string,closed=false){
  if(closed)return [row([button('📄 Transcript',`nexium:ticket-transcript:${id}`,2),button('⭐ Avaliar',`nexium:ticket-rate:${id}`,1),button('🗑️ Deletar',`nexium:ticket-delete:${id}`,4)])];
  return [row([button('🚪 Sair do ticket',`nexium:ticket-cancel:${id}`,2)]),row([button('🙋 Assumir',`nexium:ticket-claim:${id}`),button('🔧 Painel Staff',`nexium:ticket-staff:${id}`,1)]),row([button('💰 Gerar Pagamento',`nexium:ticket-payment:${id}`,3)]),row([button('✅ Finalizar atendimento',`nexium:ticket-close:${id}`,4),button('📄 Transcript',`nexium:ticket-transcript:${id}`,2)]),row([button('🗑️ Deletar',`nexium:ticket-delete:${id}`,4)])];
@@ -28,14 +28,8 @@ export async function ticketModal(db:SupabaseClient,input:any,user:string){
   const component=rating?{type:3,custom_id:'stars',required:true,options:[1,2,3,4,5].map(n=>({label:`${n} estrela(s)`,value:String(n)}))}:action==='ticket-priority'?{type:3,custom_id:'priority',required:true,options:[{label:'Normal',value:'normal'},{label:'Alta',value:'high'},{label:'Urgente',value:'urgent'}]}:{type:5,custom_id:'target',required:true,min_values:1,max_values:1};
   return {type:9,data:{custom_id:`nexium:ticket-edit:${id}:${action.slice(7)}`,title:rating?'Avaliar atendimento':'Gerenciar atendimento',components:[{type:18,label:rating?'Sua avaliação':action==='ticket-priority'?'Prioridade':'Selecione o membro',component},...(rating?[textField('comment','Comentário (opcional)',false)]:[])]}};
  }
- if(action==='ticket-open'){
-  // Opening from the public panel is intentionally one-tap: the selected sector becomes
-  // the ticket subject and the private channel is created immediately. Details can be
-  // sent inside the ticket, avoiding a modal before the customer reaches support.
-  await actorFor(db,user);const panel=await panelFor(db,input,id,input.message?.id);
-  const subject=input.data.values?.[0]||'other';const sector=ticketSubjects.find(s=>s.value===subject);if(!sector)throw new BotError('INVALID_TICKET_FORM');
-  return openTicket(db,input,user,sector.label);
- }
+ // Ticket opening is processed after the deferred acknowledgment in route().
+ if(action==='ticket-open')return null;
  if(action==='ticket-close'||action==='ticket-cancel'){
   if(!uuid(id))throw new BotError('INVALID_ID');const actor=await actorFor(db,user),view=await ticketRpc(db,user,input.guild_id,'view',id);
   if(view.discord.channel_id!==input.channel_id)throw new BotError('TICKET_NOT_FOUND');

@@ -91,3 +91,23 @@ test('bot permissions do not bypass protected role hierarchy', () => {
   roles[1].permissions = '8'; roles[1].position = 1;
   assert.equal(describeBotAccess('guild', roles, ['bot']).customer_role_manageable, false);
 });
+
+test('existing Portuguese and English channels are adopted without duplicating the template',()=>{
+ const desired=templateStructure({template:'digital_store',create_channels:true,create_roles:false,create_logs:true});
+ const live={guild:{id:'guild',name:'Nexium'},roles:[],channels:[{id:'start',name:'Início',type:4},{id:'staff',name:'Área dos Staffs',type:4},{id:'terms',name:'📚・terms',type:0,parent_id:'start'}]};
+ const operations=planStructure(live,desired,[],'missing').operations;
+ assert.equal(operations.find(o=>o.key==='category:informacoes').discord_id,'start');
+ assert.equal(operations.find(o=>o.key==='category:equipe').discord_id,'staff');
+ assert.equal(operations.find(o=>o.key==='channel:termos').action,'reuse');
+});
+test('minimal template keeps logs inside the staff category',()=>{
+ const desired=templateStructure({template:'minimal',create_channels:true,create_logs:true});
+ assert.equal(desired.find(o=>o.key==='channel:logs').parentKey,'category:equipe');
+});
+
+test('inaccessible staff areas are preserved and get a separate Nexium replacement',()=>{
+ const live={guild:{id:'guild',name:'Nexium'},roles:[],bot_id:'bot',bot_role_ids:[],bot_access:{permissions:'1040'},channels:[{id:'staff',name:'Área dos Staffs',type:4,permission_overwrites:[{id:'guild',type:0,allow:'0',deny:'1040'}]}]};
+ const desired=[{key:'category:equipe',name:'EQUIPE',kind:'category',aliases:['Área dos Staffs']}];
+ const plan=planStructure(live,desired,[{logical_key:'category:equipe',discord_id:'staff',resource_type:'category'}],'reorganize');
+ assert.equal(plan.operations[0].action,'create');assert.equal(plan.operations[0].name,'EQUIPE NEXIUM');assert(plan.preserved_ids.includes('staff'));
+});

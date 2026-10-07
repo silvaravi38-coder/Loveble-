@@ -12,7 +12,7 @@ export async function executorJob(db:SupabaseClient,guild:string,actorId:string,
  const result=await response.json();
  if(!response.ok)return privateMessage(`Job ${job.id}: ${result.error||'Falha'}\nConsulte os logs no Admin.`);
  const summary=result.job?.result;
- return privateMessage(`Job ${job.id}: ${result.job.status}\n${action==='scan'?`${summary.categories} categorias, ${summary.channels} canais, ${summary.roles} cargos.`:action==='preview'?JSON.stringify(summary.operations.map((o:any)=>({name:o.name,action:o.action}))).slice(0,1500):action==='backup'?`Snapshot estrutural: ${summary.snapshot_id}`:`Criados: ${summary.created?.length||0}. Nenhuma exclusão.`}\n${action==='preview'?'Revise o plano no Admin. Aplicar só permite criação, com backup e estrutura inalterada.':''}`);
+ return privateMessage(`Job ${job.id}: ${result.job.status}\n${action==='scan'?`${summary.categories} categorias, ${summary.channels} canais, ${summary.roles} cargos.`:action==='preview'?JSON.stringify(summary.operations.map((o:any)=>({name:o.name,action:o.action}))).slice(0,1500):action==='backup'?`Snapshot estrutural: ${summary.snapshot_id}`:`Criados: ${summary.created?.length||0}. Nenhuma exclusão.`}\n${action==='preview'?'Revise o plano no Admin. Aplicar permite criar faltantes e mover canais conforme o preview, com backup e estrutura inalterada.':''}`);
 }
 export async function panelJob(db:SupabaseClient,guild:string,actorId:string,action:'publish'|'sync'|'unpublish',panelId:string,execute:()=>Promise<any>) {
  const config=checked(await db.from('discord_builder_configs').select('id').eq('guild_id',guild).order('updated_at',{ascending:false}).limit(1).single());

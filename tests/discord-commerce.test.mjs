@@ -67,13 +67,13 @@ test('ticket panel selects original Nexium subjects and unpublish removes all co
  const payload=ticketPanel(panel);assert.equal(payload.components[0].components[0].type,3);assert.equal(payload.components[0].components[0].options.length,4);assert.deepEqual(payload.allowed_mentions.parse,[]);assert.equal(ticketPanel(panel,true).components.length,0);
  const buttons=ticketControls(panel.id).flatMap(r=>r.components);assert.equal(buttons.length,7);for(const b of buttons)assert(b.custom_id.length<=100);assert(buttons.some(b=>b.custom_id.includes('ticket-close')));
 });
-test('ticket modal validates current panel message and stale submission cannot create a ticket',async()=>{
+test('ticket opening skips modal and stale panels cannot create a ticket',async()=>{
  const {ticketModal,submitTicketModal,modalValues}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');
  const id='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';let rpcCalls=0;
  const db={from(table){return {select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'profile'}:{id,message_id:'1557132199227031552'},error:null}),single:async()=>({data:{id:'profile',role:'customer'},error:null})}},rpc(){rpcCalls++;throw Error('must not create')}};
  const input={type:3,guild_id:'guild',channel_id:'channel',message:{id:'1557132199227031552'},data:{custom_id:`nexium:ticket-open:${id}`,values:['payment']}};
- const modal=await ticketModal(db,input,'user');assert.equal(modal.type,9);assert(modal.data.custom_id.length<=100);assert.equal(modal.data.components[0].component.max_length,450);
- await assert.rejects(()=>ticketModal(db,{...input,message:{id:'other'}},'user'),e=>e.code==='PANEL_PRODUCT_MISMATCH');
+ assert.equal(await ticketModal(db,input,'user'),null);assert.equal(rpcCalls,0);
+ await assert.rejects(()=>route(db,{...input,message:{id:'other'}},'user'),e=>e.code==='PANEL_PRODUCT_MISMATCH');
  const submit={...input,type:5,data:{custom_id:`nexium:ticket-new:${id}:payment:other`,components:[{type:18,component:{custom_id:'reason',value:'Ajuda no pagamento'}}]}};
  await assert.rejects(()=>submitTicketModal(db,submit,'user'),e=>e.code==='PANEL_PRODUCT_MISMATCH');assert.equal(rpcCalls,0);
  assert.deepEqual(modalValues({data:{components:[{type:18,component:{custom_id:'outcome',values:['resolved']}}]}}),{outcome:'resolved'});
@@ -87,7 +87,7 @@ test('customer cannot open staff finalization form and form audit never stores r
 test('ticket card shows real client/staff metadata and closed controls cannot claim again',async()=>{
  const {ticketCard}=await import('../supabase/functions/discord-interactions/ticket-card.ts');
  const card=ticketCard('ticket-id',{id:'ticket-id',status:'open',subject:'Ajuda no acesso',created_at:'2026-10-06T23:21:00Z',priority:'normal',order_id:null},{id:'client',username:'cliente',avatar:null},{full_name:'Atendente'},'role');
- assert.equal(card.embeds[0].fields.find(f=>f.name==='Atendente').value,'Atendente');assert.equal(card.embeds[0].fields.find(f=>f.name==='Cliente').value,'cliente');assert.deepEqual(card.allowed_mentions.parse,[]);assert(card.components.length<=5);
+ assert.match(card.embeds[0].fields.find(f=>f.name==='ℹ️ | Informações').value,/Assumido:.*Atendente/);assert.match(card.embeds[0].description,/<@client>/);assert.deepEqual(card.allowed_mentions.parse,[]);assert(card.components.length<=5);
  const closed=ticketCard('ticket-id',{status:'resolved',subject:'Ajuda',created_at:'2026-10-06T23:21:00Z',priority:'normal'},{id:'client'},null);assert(!closed.components.flatMap(r=>r.components).some(b=>b.custom_id.includes('ticket-claim')));
 });
 test('deletion requires closed bot-created ticket and permission drift changes preview fingerprint',async()=>{
@@ -104,4 +104,21 @@ test('staff cannot create a PIX for themselves from another customer ticket',asy
  const {ticketActionButton}=await import('../supabase/functions/discord-interactions/ticket-actions.ts');const db=actorDb('admin');db.rpc=async()=>({data:{ticket:{user_id:'customer',order_id:'order'},discord:{channel_id:'channel'}},error:null});
  await assert.rejects(()=>ticketActionButton(db,{guild_id:'guild',channel_id:'channel'},'staff','ticket-payment','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='TICKET_PAYMENT_OWNER_REQUIRED');
  const denied=actorDb('customer');denied.rpc=db.rpc;await assert.rejects(()=>ticketActionButton(denied,{guild_id:'guild',channel_id:'channel'},'customer','ticket-staff','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
+});
+
+test('repeated ticket opening returns the existing channel without a Discord mutation',async()=>{
+ const {openTicket}=await import('../supabase/functions/discord-interactions/tickets.ts');
+ const db=actorDb('customer');let rpcCalls=0;db.rpc=async()=>{rpcCalls++;return {data:{reused:true,channel_id:'123',ticket_id:'ticket'},error:null};};
+ const message=await openTicket(db,{guild_id:'guild',id:'interaction'},'user','Pagamento PIX');
+ assert.equal(rpcCalls,1);assert.match(message.content,/<#123>/);assert.equal(message.components[0].components[0].url,'https://discord.com/channels/guild/123');
+});
+
+test('deleted panel messages recover only after a confirmed 404; unpublishing does not recreate them',async()=>{
+ const {publishPanelMessage}=await import('../supabase/functions/discord-interactions/catalog.ts');
+ const {BotError}=await import('../supabase/functions/discord-interactions/api.ts');
+ const panel={id:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',channel_id:'channel',message_id:'deleted'};const calls=[];
+ const request=async(path,method='GET',payload)=>{calls.push(method);if(method==='GET')throw new BotError('DISCORD_RESOURCE_NOT_FOUND');assert.equal(payload.enforce_nonce,true);return {id:'replacement'};};
+ assert.equal((await publishPanelMessage(panel,{},false,request)).id,'replacement');assert.deepEqual(calls,['GET','POST']);calls.length=0;
+ assert.equal(await publishPanelMessage(panel,{},true,request),null);assert.deepEqual(calls,['GET']);
+ await assert.rejects(()=>publishPanelMessage(panel,{},false,async()=>{throw new BotError('DISCORD_NETWORK')}),e=>e.code==='DISCORD_NETWORK');
 });

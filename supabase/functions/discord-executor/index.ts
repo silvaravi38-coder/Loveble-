@@ -1,9 +1,12 @@
+import {syncInformationMessage} from './information.ts';
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.57.4';
-import { discordGet, discordCreateMessage, discordUpdateMessage, ExecutorError } from './discord.ts';
+import { discordGet, ExecutorError } from './discord.ts';
 import { planStructure, templateStructure, type Snapshot, type Strategy } from './planner.ts';
 import { connectRuntime } from './runtime.ts';
 import { describeBotAccess } from './permissions.ts';
-import { requireCreatePlan, createPayload, discordCreate } from './apply.ts';
+import { requireCreatePlan, createPayload, discordCreate, discordMove, structureFingerprint } from './apply.ts';
+import { automaticSettings } from './settings.ts';
+import { BotError } from '../discord-interactions/api.ts';
 import { publishPanel } from '../discord-interactions/catalog.ts';
 
 const cors = { 'Access-Control-Allow-Origin': 'https://nexium-store.vercel.app', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
@@ -15,7 +18,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   // Readiness reveals only a boolean. Every data/operation endpoint verifies the user and admin role.
   if (req.method === 'GET' && new URL(req.url).searchParams.get('health') === '1') {
-    return response({ version: 'create-executor-v1', discord_token_configured: !!Deno.env.get('DISCORD_BOT_TOKEN'), supported_actions: ['scan', 'preview', 'backup', 'apply'] });
+    return response({ version: 'organizer-v2', discord_token_configured: !!Deno.env.get('DISCORD_BOT_TOKEN'), supported_actions: ['scan', 'preview', 'backup', 'apply'] });
   }
   if (req.method !== 'POST') return response({ error: 'METHOD_NOT_ALLOWED' }, 405);
   let jobId: string | undefined;
@@ -50,6 +53,7 @@ Deno.serve(async (req: Request) => {
     if (authError || !auth.user) throw new ExecutorError('UNAUTHORIZED', 401);
     const { data: profile } = checked(await db.from('profiles').select('role').eq('id', auth.user.id).single());
     if (profile?.role !== 'admin') throw new ExecutorError('FORBIDDEN', 403);
+    actorId = auth.user.id;
     const { config_id, idempotency_key } = input;
     action = input.action; strategy = input.strategy || 'missing';
     if (!['scan', 'preview', 'backup', 'apply'].includes(action)) throw new ExecutorError('ACTION_NOT_IMPLEMENTED', 409);
@@ -96,7 +100,7 @@ Deno.serve(async (req: Request) => {
       const botMember = await get(`/guilds/${config.guild_id}/members/${bot.id}`);
       const botAccess = describeBotAccess(config.guild_id, roles, botMember.roles || []);
       const threads = await get(`/guilds/${config.guild_id}/threads/active`);
-      const structure: Snapshot & { active_threads: unknown; captured_at: string; bot_access: unknown; bot_role_ids: string[] } = { guild, channels, roles, bot_access: botAccess, bot_role_ids: botMember.roles || [], active_threads: threads.threads || [], captured_at: new Date().toISOString() };
+      const structure: Snapshot & { active_threads: unknown; captured_at: string; bot_access: unknown; bot_role_ids: string[] } = { guild, channels, roles, bot_id:bot.id, bot_access: botAccess, bot_role_ids: botMember.roles || [], active_threads: threads.threads || [], captured_at: new Date().toISOString() };
       const bytes = new TextEncoder().encode(JSON.stringify(structure));
       const checksum = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
       const { data: snapshotId } = checked(await db.rpc('discord_save_scan', { p_job_id: jobId, p_structure: structure, p_checksum: checksum }));
@@ -113,6 +117,12 @@ Deno.serve(async (req: Request) => {
       const current:Snapshot = {guild:await get(`/guilds/${config.guild_id}`),channels:await get(`/guilds/${config.guild_id}/channels`),roles:await get(`/guilds/${config.guild_id}/roles`)};
       const member = await get(`/guilds/${config.guild_id}/members/${bot.id}`);
       const access = describeBotAccess(config.guild_id,current.roles,member.roles||[]);
+      if (strategy !== preview.result.strategy) strategy = preview.result.strategy;
+      if(structureFingerprint(before.structure)!==structureFingerprint(current)){
+        const old=JSON.parse(structureFingerprint(before.structure)),fresh=JSON.parse(structureFingerprint(current));
+        const changes=['channels','roles'].flatMap(kind=>{const ids=new Set([...old[kind],...fresh[kind]].map((r:any)=>r.id));return [...ids].flatMap(id=>{const a=old[kind].find((r:any)=>r.id===id),b=fresh[kind].find((r:any)=>r.id===id);return JSON.stringify(a)===JSON.stringify(b)?[]:[{kind,id,before:a||null,current:b||null}];});});
+        checked(await db.from('discord_job_logs').insert({job_id:jobId,level:'warning',code:'SERVER_DRIFT',details:{changes}}));
+      }
       const {ids,operations} = requireCreatePlan(preview.result,config.updated_at,before.structure,current);
       if (operations.some(o=>o.kind==='role') && !access.manage_roles) throw new ExecutorError('DISCORD_PERMISSION_DENIED',424);
       if (operations.some(o=>o.kind!=='role') && !access.manage_channels) throw new ExecutorError('DISCORD_PERMISSION_DENIED',424);
@@ -124,13 +134,15 @@ Deno.serve(async (req: Request) => {
         checked(await db.from('discord_job_operations').insert({job_id:jobId,operation_key:operation.key,resource_type:operation.kind,status:'running'}));
         let discordId:string|undefined;
         try {
-          const payload = createPayload(operation,ids,config.guild_id,bot.id);
-          const resource = await discordCreate(config.guild_id,operation.kind,payload,token,jobId!);
+          const payload = operation.action==='move'?{}:createPayload(operation,ids,config.guild_id,bot.id);
+          const resource = operation.action==='move'
+            ? await discordMove(operation,ids,config.guild_id,token,jobId!,bot.id)
+            : await discordCreate(config.guild_id,operation.kind,payload,token,jobId!);
           discordId=resource.id; ids.set(operation.key,resource.id);
-          checked(await db.from('discord_resource_mappings').upsert({guild_id:config.guild_id,discord_id:resource.id,resource_type:operation.kind,logical_key:operation.key,name:resource.name,parent_id:resource.parent_id||null,managed_by_nexium:true,snapshot_id:backupId,last_seen_at:new Date().toISOString()}));
+          checked(await db.rpc('discord_bind_resource',{p_resource:{guild_id:config.guild_id,discord_id:resource.id,resource_type:operation.kind,logical_key:operation.key,name:resource.name,parent_id:resource.parent_id||null,...(operation.action==='create'?{managed_by_nexium:true}:{}),snapshot_id:backupId,last_seen_at:new Date().toISOString()}}));
           checked(await db.from('discord_job_operations').update({status:'succeeded',discord_id:resource.id,finished_at:new Date().toISOString()}).eq('job_id',jobId).eq('operation_key',operation.key));
-          checked(await db.from('discord_job_logs').insert({job_id:jobId,level:'info',code:'RESOURCE_CREATED',details:{key:operation.key,discord_id:resource.id}}));
-          created.push({key:operation.key,discord_id:resource.id});
+          checked(await db.from('discord_job_logs').insert({job_id:jobId,level:'info',code:operation.action==='move'?'RESOURCE_MOVED':'RESOURCE_CREATED',details:{key:operation.key,discord_id:resource.id}}));
+          created.push({key:operation.key,discord_id:resource.id,action:operation.action});
         } catch(error) {
           const code=error instanceof ExecutorError?error.code:'MUTATION_RESULT_UNCERTAIN_RESCAN';
           const uncertain=!!discordId || code==='MUTATION_RESULT_UNCERTAIN_RESCAN';
@@ -141,16 +153,28 @@ Deno.serve(async (req: Request) => {
       // Publish/sync the two interactive Nexium panels after channel IDs are resolved.
       // Existing panels are reused, so applying the organizer again does not spam duplicate messages.
       const publishedPanels:any[]=[];
-      const panelTargets=[{key:'channel:produtos',kind:'sales',name:'🛒 Loja Nexium'},{key:'channel:abrirticket',kind:'tickets',name:'🎫 Central de Atendimento'}];
-      const products=checked(await db.from('products').select('id').eq('active',true).order('name').limit(25)).data as any[];
+      const panelTargets=[...(config.create_product_panels?[{key:'channel:produtos',kind:'sales',name:'🛒 Loja Nexium'}]:[]),...(config.create_ticket_panel?[{key:ids.has('channel:abrirticket')?'channel:abrirticket':'channel:suporte',kind:'tickets',name:'🎫 Central de Atendimento'}]:[])];
+      let productQuery=db.from('products').select('id').eq('active',true);
+      if(Array.isArray(config.selected_product_ids)&&config.selected_product_ids.length)productQuery=productQuery.in('id',config.selected_product_ids);
+      const selectedProducts=checked(await productQuery.order('name').limit(25)).data as any[];
+      const settings=checked(await db.from('discord_bot_settings').select('id,id_mode').eq('guild_id',config.guild_id).maybeSingle()).data;
+      if(!settings||settings.id_mode==='automatic'){
+        const data={...automaticSettings(ids),guild_id:config.guild_id,updated_by:actorId,updated_at:new Date().toISOString()};
+        if(settings)checked(await db.from('discord_bot_settings').update(data).eq('id',settings.id));
+        else checked(await db.from('discord_bot_settings').insert(data));
+      }
       for(const target of panelTargets){
         const channelId=ids.get(target.key); if(!channelId) continue;
-        if(target.kind==='sales'&&!products.length) continue;
-        let panel=checked(await db.from('discord_sales_panels').select('*').eq('guild_id',config.guild_id).eq('channel_id',channelId).eq('panel_kind',target.kind).eq('active',true).maybeSingle()).data;
+        if(target.kind==='sales'&&!selectedProducts.length) continue;
+        let panel=checked(await db.from('discord_sales_panels').select('*').eq('guild_id',config.guild_id).eq('channel_id',channelId).eq('panel_kind',target.kind).eq('active',true).order('last_synced_at',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false}).limit(1).maybeSingle()).data;
         if(!panel){
-          panel=checked(await db.from('discord_sales_panels').insert({name:target.name,slug:`organizer-${target.kind}-${channelId}`,guild_id:config.guild_id,channel_id:channelId,product_ids:target.kind==='sales'?products.map(p=>p.id):[],panel_kind:target.kind,active:true,created_by:actorId,sync_status:'pending'}).select('*').single()).data;
-        }else if(target.kind==='sales'){
-          panel=checked(await db.from('discord_sales_panels').update({product_ids:products.map(p=>p.id),sync_status:'pending'}).eq('id',panel.id).select('*').single()).data;
+          panel=checked(await db.from('discord_sales_panels').insert({name:target.name,slug:`organizer-${target.kind}-${channelId}`,guild_id:config.guild_id,channel_id:channelId,product_ids:target.kind==='sales'?selectedProducts.map(p=>p.id):[],panel_kind:target.kind,active:true,created_by:actorId,sync_status:'pending'}).select('*').single()).data;
+        }else{
+          panel=checked(await db.from('discord_sales_panels').update({name:target.name,...(target.kind==='sales'?{product_ids:selectedProducts.map(p=>p.id)}:{}),sync_status:'pending'}).eq('id',panel.id).select('*').single()).data;
+        }
+        if(target.kind==='tickets'){
+          const duplicatePanels=checked(await db.from('discord_sales_panels').select('id').eq('guild_id',config.guild_id).eq('channel_id',channelId).eq('panel_kind','tickets').eq('active',true).neq('id',panel.id)).data||[];
+          for(const duplicate of duplicatePanels)await publishPanel(db,config.guild_id,channelId,actorId!,duplicate.id,true);
         }
         await publishPanel(db,config.guild_id,channelId,actorId!,panel.id);
         publishedPanels.push({kind:target.kind,channel_id:channelId,panel_id:panel.id});
@@ -168,28 +192,35 @@ Deno.serve(async (req: Request) => {
         const payload={content:null,allowed_mentions:{parse:[]},embeds:[{title:item.title,description:item.description,color:0x5865f2,footer:{text:'Nexium Store'}}]};
         const logicalKey=`panel:${item.key}`;
         const mapped=checked(await db.from('discord_resource_mappings').select('discord_id').eq('guild_id',config.guild_id).eq('resource_type','message').eq('logical_key',logicalKey).maybeSingle()).data;
-        let message=mapped?.discord_id?await discordUpdateMessage(channelId,mapped.discord_id,payload,token):null;
-        if(!message)message=await discordCreateMessage(channelId,payload,token);
-        checked(await db.from('discord_resource_mappings').upsert({guild_id:config.guild_id,discord_id:message.id,resource_type:'message',logical_key:logicalKey,name:item.title,parent_id:channelId,managed_by_nexium:true,snapshot_id:backupId,last_seen_at:new Date().toISOString()}));
+        const message=await syncInformationMessage(channelId,mapped?.discord_id,payload,logicalKey,bot.id,token);
+        checked(await db.rpc('discord_bind_resource',{p_resource:{guild_id:config.guild_id,discord_id:message.id,resource_type:'message',logical_key:logicalKey,name:item.title,parent_id:channelId,managed_by_nexium:true,snapshot_id:backupId,last_seen_at:new Date().toISOString()}}));
         infoMessages.push({key:item.key,channel_id:channelId,message_id:message.id});
       }
-      result={created,backup_snapshot_id:backupId,reused:preview.result.operations.filter((o:{action:string})=>o.action==='reuse').length,destructive_operations:0,published_panels:publishedPanels,published_info_messages:infoMessages,panel_publication_pending:false};
+      result={created:created.filter(o=>o.action==='create'),moved:created.filter(o=>o.action==='move'),backup_snapshot_id:backupId,reused:preview.result.operations.filter((o:{action:string})=>o.action==='reuse').length,destructive_operations:0,published_panels:publishedPanels,published_info_messages:infoMessages,panel_publication_pending:false};
     } else {
       const { data: snapshot } = checked(await db.from('discord_structure_snapshots').select('*').eq('guild_id', config.guild_id).order('created_at', { ascending: false }).limit(1).maybeSingle());
       if (!snapshot || Date.now() - Date.parse(snapshot.created_at) > 600000) throw new ExecutorError('FRESH_SCAN_REQUIRED', 409);
       const { data: mappings } = checked(await db.from('discord_resource_mappings').select('logical_key,discord_id,resource_type').eq('guild_id', config.guild_id).not('logical_key', 'is', null));
+      const existingPanels=checked(await db.from('discord_sales_panels').select('channel_id,panel_kind').eq('guild_id',config.guild_id).eq('active',true)).data||[];
+      for(const [kind,key] of [['tickets','channel:abrirticket'],['sales','channel:produtos']]){
+        const channels=[...new Set(existingPanels.filter((p:any)=>p.panel_kind===kind).map((p:any)=>p.channel_id))];
+        if(channels.length===1&&!mappings?.some((m:any)=>m.logical_key===key))mappings?.push({logical_key:key,discord_id:channels[0],resource_type:'channel'});
+      }
       const plan = planStructure(snapshot.structure, templateStructure(config), mappings || [], strategy as Strategy);
       // Preserve unambiguous logical bindings across later renames. Existing resources remain unowned.
       for (const operation of plan.operations) {
-        if (operation.discord_id) checked(await db.from('discord_resource_mappings').update({ logical_key: operation.key }).eq('guild_id', config.guild_id).eq('discord_id', operation.discord_id));
+        if (operation.discord_id){
+          const resource=[...snapshot.structure.channels,...snapshot.structure.roles].find((r:any)=>r.id===operation.discord_id);
+          checked(await db.rpc('discord_bind_resource',{p_resource:{guild_id:config.guild_id,discord_id:operation.discord_id,resource_type:operation.kind,logical_key:operation.key,name:resource.name,parent_id:resource.parent_id||null,snapshot_id:snapshot.id}}));
+        }
       }
-      result = { ...plan, executable: ['missing','reuse'].includes(strategy) && plan.executable, executor_pending: !['missing','reuse'].includes(strategy), snapshot_id: snapshot.id, checksum: snapshot.checksum, config_updated_at: config.updated_at };
+      result = { ...plan, executable: ['missing','reuse','reorganize'].includes(strategy) && plan.executable, executor_pending: !['missing','reuse','reorganize'].includes(strategy), snapshot_id: snapshot.id, checksum: snapshot.checksum, config_updated_at: config.updated_at };
     }
     checked(await db.from('discord_job_logs').insert({ job_id: jobId, level: 'info', code: 'COMPLETED', details: { action } }));
     const { data: finished } = checked(await db.from('discord_jobs').update({ status: 'succeeded', result, finished_at: new Date().toISOString() }).eq('id', jobId).select('*').single());
     return response({ job: finished });
   } catch (error) {
-    const safe = error instanceof ExecutorError ? error : new ExecutorError('INTERNAL_ERROR', 500);
+    const safe = error instanceof ExecutorError ? error : error instanceof BotError?new ExecutorError(error.code,409):new ExecutorError('INTERNAL_ERROR', 500);
     if (jobId && db) {
       const blocked = ['DISCORD_TOKEN_MISSING', 'DISCORD_TOKEN_INVALID', 'DISCORD_PERMISSION_DENIED', 'DISCORD_GUILD_OR_RESOURCE_NOT_FOUND', 'FRESH_SCAN_REQUIRED'].includes(safe.code);
       await db.from('discord_jobs').update({ status: blocked ? 'blocked' : 'failed', error_code: safe.code, error_message: safe.code, finished_at: new Date().toISOString() }).eq('id', jobId);

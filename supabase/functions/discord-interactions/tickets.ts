@@ -16,6 +16,7 @@ export async function openTicket(db:SupabaseClient,input:any,user:string,reason:
  if(order&&!uuid(order))throw new BotError('INVALID_ID');
  const actor=await actorFor(db,user);
  const created=await ticketRpc(db,user,input.guild_id,'open',null,{reason:reason.trim(),order_id:order||null,interaction_id:input.id});
+ if(created.reused)return {...privateMessage(created.channel_id?`🎫 Você já tem um atendimento para este assunto: <#${created.channel_id}>`:'🎫 Este atendimento já foi solicitado. Aguarde ou peça à equipe para revisar a abertura.'),components:created.channel_id?[row([{type:2,style:5,label:'Ir para meu ticket',url:`https://discord.com/channels/${input.guild_id}/${created.channel_id}`}])]:[]};
  checked(await db.from('support_messages').insert({ticket_id:created.ticket_id,sender_id:actor.id,sender_role:actor.role,sender_name:actor.full_name,message:reason}));
  const config=checked(await db.from('discord_bot_settings').select('category_support_id,role_support_id,role_manager_id').eq('guild_id',input.guild_id).maybeSingle());
  const mappings=checked(await db.from('discord_resource_mappings').select('logical_key,discord_id').eq('guild_id',input.guild_id).in('logical_key',['role:suporte','role:gerente'])) as any[];
@@ -31,7 +32,7 @@ export async function openTicket(db:SupabaseClient,input:any,user:string,reason:
   const payload=ticketCard(created.ticket_id,{...ticket,subject:reason},input.member.user,null,config?.role_support_id);
   const welcome=await discord(`/channels/${channel.id}/messages`,'POST',{...payload,content:`<@${user}>${config?.role_support_id?` • <@&${config.role_support_id}>`:''}`,allowed_mentions:{parse:[],users:[user],roles:config?.role_support_id?[config.role_support_id]:[]}});
   checked(await db.from('discord_tickets').update({card_message_id:welcome.id}).eq('ticket_id',created.ticket_id));
-  return privateMessage(`Ticket aberto: <#${channel.id}>\nID: ${created.ticket_id}\nSeu atendimento também está registrado no suporte da loja.`);
+  return {...privateMessage(`🎫 Ticket aberto: <#${channel.id}>\nEntre no canal para conversar com a equipe.`),components:[row([{type:2,style:5,label:'Ir para meu ticket',url:`https://discord.com/channels/${input.guild_id}/${channel.id}`}])]};
  }catch(error){await db.from('discord_tickets').update({...(createdChannel?{channel_id:createdChannel}:{}),channel_state:createdChannel||error instanceof BotError&&error.code==='MUTATION_UNCERTAIN'?'uncertain':'failed'}).eq('ticket_id',created.ticket_id);throw error;}
 }
 export async function captureTranscript(db:SupabaseClient,id:string,channelId:string,actorId:string) {
@@ -100,6 +101,6 @@ export async function actTicket(db:SupabaseClient,input:any,userId:string,action
  if(action==='transfer')return privateMessage('🔄 **Atendimento transferido com sucesso.**');
  if(action==='add_member')return privateMessage('➕ **Membro adicionado ao atendimento.**');
  if(action==='remove_member')return privateMessage('➖ **Membro removido do atendimento.**');
- if(action==='rating')return privateMessage('⭐ **Avaliação enviada. Obrigado pelo feedback!**');
+ if(action==='rate')return privateMessage('⭐ **Avaliação enviada. Obrigado pelo feedback!**');
  return privateMessage('✅ **Ação concluída com sucesso.**');
 }

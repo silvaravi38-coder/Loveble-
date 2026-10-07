@@ -1,3 +1,4 @@
+import {ticketSubjects} from './ticket-ui.ts';
 import {ticketActionButton} from './ticket-actions.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,actorFor,discord,productFor,uuid,snowflake,safeText,audit,fortalezaMonthStart} from './api.ts';
@@ -39,7 +40,12 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
   const all=checked(await db.from('products').select('id').eq('active',true).order('name').limit(25)) as any[];
   const ids=sub==='painel-tickets'?[]:o.produtos?String(o.produtos).split(',').map(id=>id.trim()):all.map(p=>p.id);
   if(ids.length>25||(sub==='painel'&&!ids.length)||ids.some(id=>!uuid(id)))throw new BotError('PANEL_PRODUCT_LIMIT');
-  const panel=checked(await db.from('discord_sales_panels').insert({name:String(o.nome).slice(0,100),slug:`discord-${input.id}`,guild_id:input.guild_id,channel_id:input.channel_id,product_ids:[...new Set(ids)],panel_kind:sub==='painel-tickets'?'tickets':'sales',active:true,created_by:actor.id,sync_status:'pending'}).select('id').single());
+  let lookup=db.from('discord_sales_panels').select('id').eq('guild_id',input.guild_id).eq('channel_id',input.channel_id).eq('panel_kind',sub==='painel-tickets'?'tickets':'sales').eq('active',true);
+  if(sub==='painel')lookup=lookup.eq('name',String(o.nome).slice(0,100));
+  let panel=checked(await lookup.order('created_at',{ascending:false}).limit(1).maybeSingle());
+  const draft={name:String(o.nome).slice(0,100),product_ids:[...new Set(ids)],sync_status:'pending'};
+  if(panel)checked(await db.from('discord_sales_panels').update(draft).eq('id',panel.id));
+  else panel=checked(await db.from('discord_sales_panels').insert({...draft,slug:`discord-${input.id}`,guild_id:input.guild_id,channel_id:input.channel_id,panel_kind:sub==='painel-tickets'?'tickets':'sales',active:true,created_by:actor.id}).select('id').single());
   return panelJob(db,input.guild_id,actor.id,'publish',panel.id,()=>publishPanel(db,input.guild_id,input.channel_id,actor.id,panel.id));
  }
  if(sub==='paineis'){const panels=checked(await db.from('discord_sales_panels').select('id,name,channel_id,active,sync_status').eq('guild_id',input.guild_id).limit(20)) as any[];return privateMessage(panels.map(p=>`${safeText(p.name,80)} — ${p.id} — ${p.sync_status}`).join('\n')||'Nenhum painel cadastrado.');}
@@ -85,7 +91,7 @@ export async function route(db:SupabaseClient,input:any,userId:string) {
   if(['ticket-staff','ticket-payment','ticket-delete','ticket-delete-confirm','ticket-manage'].includes(parts[1]))return ticketActionButton(db,input,userId,parts[1],parts[2]);
   if(parts[1]==='ticket-open'){
    if(!uuid(parts[2]))throw new BotError('INVALID_ID');const panel=checked(await db.from('discord_sales_panels').select('*').eq('id',parts[2]).eq('guild_id',input.guild_id).eq('channel_id',input.channel_id).eq('active',true).eq('panel_kind','tickets').maybeSingle());
-   if(!panel||panel.message_id!==input.message?.id)throw new BotError('PANEL_PRODUCT_MISMATCH');return openTicket(db,input,userId,'Atendimento solicitado pelo painel');
+   if(!panel||panel.message_id!==input.message?.id)throw new BotError('PANEL_PRODUCT_MISMATCH');const subject=ticketSubjects.find(s=>s.value===input.data.values?.[0]);if(!subject)throw new BotError('INVALID_TICKET_FORM');return openTicket(db,input,userId,subject.label);
   }
   if(parts[1]==='panel'){const product=input.data.values?.[0];await ownedPanel(db,input,parts[2],product,true);return productDetails(db,product,parts[2]);}
   if(parts[1]==='buy'||parts[1]==='variant'){
