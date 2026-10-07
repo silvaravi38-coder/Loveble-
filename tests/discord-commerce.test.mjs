@@ -284,3 +284,27 @@ test('administrative AI rejects payment, permission and unscoped proposal mutati
  assert.deepEqual(validateStoreProposal({kind:'config',field:'pix_enabled',value:false}).data,{field:'pix_enabled',value:false});
  await assert.rejects(()=>applyStoreProposal(actorDb('customer'),{guild_id:'guild'},'user','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
 });
+
+
+test('payment credentials modal and submission reject customers and do not echo secrets',async()=>{
+ const {paymentConfigModal,savePaymentConfig}=await import('../supabase/functions/discord-interactions/payment-config.ts');
+ const input={id:'interaction',type:3,guild_id:'guild',data:{custom_id:'nexium:payment-config:edit'}};
+ await assert.rejects(()=>paymentConfigModal(actorDb('customer'),input,'user'),e=>e.code==='FORBIDDEN');
+ const modal=await paymentConfigModal(actorDb('admin'),input,'user');assert.equal(modal.type,9);assert.equal(modal.data.components.length,2);assert(!JSON.stringify(modal).includes('value'));
+ const form={...input,type:5,data:{custom_id:'nexium:payment-config:save',components:[{components:[{custom_id:'client_id',value:'TEST-ID-123'},{custom_id:'client_secret',value:'TEST-SECRET-123'}]}]}};
+ await assert.rejects(()=>savePaymentConfig(actorDb('customer'),form,'user'),e=>e.code==='FORBIDDEN');
+ let saved;const db={...actorDb('admin'),rpc:async(name,args)=>{saved={name,args};return {data:'version',error:null};}};
+ const result=await savePaymentConfig(db,form,'user');assert.equal(saved.name,'discord_save_payment_credentials');assert.equal(saved.args.p_secret,'TEST-SECRET-123');assert(!JSON.stringify(result).includes('TEST-SECRET'));assert.deepEqual(result.allowed_mentions.parse,[]);
+});
+test('payment parser rejects absent or malformed credentials and reads private modal fields only',async()=>{
+ const {parsePaymentConfig}=await import('../supabase/functions/discord-interactions/payment-config.ts');
+ assert.throws(()=>parsePaymentConfig({}),e=>e.code==='INVALID_PAYMENT_CREDENTIALS');
+ for(const value of ['short','contains space','x'.repeat(513)])assert.throws(()=>parsePaymentConfig({data:{components:[{components:[{custom_id:'client_id',value:'TEST-ID-123'},{custom_id:'client_secret',value}]}]}}));
+});
+test('payment resolution uses the immutable order credential version before legacy environment',async()=>{
+ const {resolvePaymentCredentials}=await import('../supabase/functions/discord-interactions/payment-config.ts');
+ let params;const db={rpc:async(name,args)=>{params=args;return {data:{id:'vault-id',secret:'vault-secret'},error:null};}};
+ assert.deepEqual(await resolvePaymentCredentials(db,'guild','order'),{id:'vault-id',secret:'vault-secret'});assert.deepEqual(params,{p_guild:'guild',p_order:'order'});
+ const previous=globalThis.Deno;globalThis.Deno={env:{get:name=>name==='TURBOFYPAY_CLIENT_ID'?'legacy-id':'legacy-secret'}};
+ try{assert.deepEqual(await resolvePaymentCredentials({rpc:async()=>({data:null,error:null})},undefined,'old-order'),{id:'legacy-id',secret:'legacy-secret'});}finally{globalThis.Deno=previous;}
+});

@@ -24,7 +24,7 @@ export async function runWorker(db:SupabaseClient){
  for(const request of requests){
   const order=checked(await db.from('orders').select('status').eq('id',request.order_id).single());if(order.status!=='pending')continue;
   const payment=checked(await db.from('payments').select('provider_payment_id').eq('order_id',request.order_id).eq('provider','turbofypay').maybeSingle());if(!payment)continue;
-  try{const charge=await providerCharge(payment.provider_payment_id);const settled=checked(await db.rpc('discord_settle_payment',{p_payment_id:payment.provider_payment_id,p_charge:charge}));if(settled.paid)await fulfilPaid(db,request.order_id);reconciled++;}catch{ /* Keep reservation until provider truth is available. */ }
+  try{const charge=await providerCharge(payment.provider_payment_id,db,request.order_id);const settled=checked(await db.rpc('discord_settle_payment',{p_payment_id:payment.provider_payment_id,p_charge:charge}));if(settled.paid)await fulfilPaid(db,request.order_id);reconciled++;}catch{ /* Keep reservation until provider truth is available. */ }
  }
  return {claimed_notifications:outbox.length,claimed_messages:records.length,reconciled_payments:reconciled};
 }

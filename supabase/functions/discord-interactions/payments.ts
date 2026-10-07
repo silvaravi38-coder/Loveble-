@@ -1,3 +1,4 @@
+import {resolvePaymentCredentials} from './payment-config.ts';
 import {fulfilProductDeliveries} from './product-fulfilment.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,uuid,actorFor,row,button,linkButton,discord,audit} from './api.ts';
@@ -12,8 +13,8 @@ export async function webhookProof(orderId:string,secret:string) {
  return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`nexium-discord-payment:${orderId}`))),b=>b.toString(16).padStart(2,'0')).join('');
 }
 export function sanitiseCharge(charge:any) {return {id:charge.id,status:charge.status,amountCents:charge.amountCents,externalRef:charge.externalRef,pix:charge.pix?{qrCode:charge.pix.qrCode,copyPaste:charge.pix.copyPaste,expiresAt:charge.pix.expiresAt}:undefined};}
-export async function providerCharge(id:string) {
- const credentials=paymentCredentials();let response:Response;
+export async function providerCharge(id:string,db?:SupabaseClient,order?:string) {
+ const credentials=db?await resolvePaymentCredentials(db,undefined,order):paymentCredentials();let response:Response;
  try{response=await fetch(`https://api.turbofypay.com/sellers/pix/${encodeURIComponent(id)}`,{headers:{'x-client-id':credentials.id,'x-client-secret':credentials.secret},signal:AbortSignal.timeout(8000)});}catch{throw new BotError('PAYMENT_PROVIDER_UNAVAILABLE');}
  if(!response.ok)throw new BotError(response.status===401?'PAYMENT_CREDENTIALS_INVALID':'PAYMENT_PROVIDER_UNAVAILABLE');
  return sanitiseCharge(await response.json());
@@ -52,10 +53,10 @@ export function pixResponse(orderId:string,payment:any) {
 export async function startPurchase(db:SupabaseClient,input:any,userId:string,productId:string,variantId?:string,panelId?:string,coupon?:string) {
  if(!uuid(productId)||(variantId&&!uuid(variantId))||(panelId&&!uuid(panelId)))throw new BotError('INVALID_ID');
  const settings=checked(await db.from('discord_bot_settings').select('pix_enabled,pix_provider').eq('guild_id',input.guild_id).maybeSingle());if(!settings?.pix_enabled||settings.pix_provider!=='turbofypay')throw new BotError('PAYMENT_DISABLED');
- const credentials=paymentCredentials();
  const prepared=await db.rpc('discord_prepare_checkout',{p_interaction_id:input.id,p_discord_user_id:userId,p_guild_id:input.guild_id,p_channel_id:input.channel_id,p_product_id:productId,p_variant_id:variantId||null,p_panel_id:panelId||null,p_coupon:coupon||null});
  if(prepared.error){const code=String(prepared.error.message);throw new BotError(['OUT_OF_STOCK','VARIANT_UNAVAILABLE','VARIANT_REQUIRED','COUPON_UNAVAILABLE','TOO_MANY_PENDING_ORDERS','LINK_REQUIRED','PANEL_PRODUCT_MISMATCH'].find(c=>code.includes(c))||'CHECKOUT_FAILED');}
  const orderId=prepared.data.order_id;
+ const credentials=await resolvePaymentCredentials(db,input.guild_id,orderId);
  let payment=checked(await db.from('payments').select('*').eq('order_id',orderId).eq('provider','turbofypay').maybeSingle());
  if(payment)return pixResponse(orderId,payment);
  const order=checked(await db.from('orders').select('total').eq('id',orderId).single());
@@ -78,7 +79,7 @@ export async function paymentStatus(db:SupabaseClient,userId:string,orderId:stri
  if(!payment)return privateMessage(`Pedido #${orderId.slice(0,8)}: ${order.status}. Nenhuma cobrança PIX registrada.`);
  const request=checked(await db.from('discord_checkout_requests').select('order_id').eq('order_id',orderId).maybeSingle());
  if(!request)return privateMessage(`Pedido do site: ${order.status}. Consulte os detalhes em Minha conta.`);
- const charge=await providerCharge(payment.provider_payment_id);const settled=checked(await db.rpc('discord_settle_payment',{p_payment_id:payment.provider_payment_id,p_charge:charge}));
+ const charge=await providerCharge(payment.provider_payment_id,db,orderId);const settled=checked(await db.rpc('discord_settle_payment',{p_payment_id:payment.provider_payment_id,p_charge:charge}));
  if(settled.paid)await fulfilPaid(db,orderId);
  return privateMessage(`Pedido #${orderId.slice(0,8).toUpperCase()} — ${settled.paid?'Pagamento confirmado. Consulte a entrega na sua conta Nexium.':String(charge.status||'pending')}`);
 }
@@ -88,7 +89,7 @@ export async function reconcilePayment(db:SupabaseClient,orderId:string,guild:st
  const order=checked(await db.from('orders').select('total').eq('id',orderId).single());
  let payment=checked(await db.from('payments').select('provider_payment_id').eq('order_id',orderId).eq('provider','turbofypay').maybeSingle());
  // GET by persisted externalRef recovers an uncertain POST; never create a second charge.
- const charge=await providerCharge(payment?.provider_payment_id||orderId);
+ const charge=await providerCharge(payment?.provider_payment_id||orderId,db,orderId);
  if(!charge.id||Number(charge.amountCents)!==Math.round(Number(order.total)*100)||(charge.externalRef&&charge.externalRef!==orderId))throw new BotError('PAYMENT_MISMATCH');
  if(!payment){
   if(!charge.pix?.copyPaste)throw new BotError('INVALID_PIX_RESPONSE');

@@ -111,3 +111,7 @@ Migration `discord_ticket_cards_controls`: IDs do cartão, marca de exclusão e 
 - Card/boleto are outside this change, per user instruction.
 
 Validation: 76 Node tests, strict backend TypeScript check, production database fixture transactions for creation/replay, role/file snapshots, unpaid rejection, idempotent fulfilment and AI quota; existing commerce and RLS suites also pass. SQL fixtures roll back all records and do not create real payments or grant actual Discord roles.
+
+## Pix configuration inside Discord — 2026-10-07
+
+`/botconfig → Definições → Formas de pagamento → Configurar Pix` opens an administrator-only private modal for TurbofyPay Client ID/Client Secret. Responses and audit events omit credentials. The backend stores versioned credentials encrypted in Supabase Vault; the public/private payment status only reports configuration presence. Saving credentials does not create a charge or claim provider validation. Existing environment credentials remain the fallback for legacy orders. New checkout rows snapshot the current credential version; webhook proof validation and provider reconciliation resolve the same version even after later credential changes. Discord configuration applies to the Discord checkout; the website's existing provider settings are unchanged.

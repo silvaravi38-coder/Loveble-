@@ -1,3 +1,4 @@
+import {paymentConfigStatus} from './payment-config.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {actorFor,BotError,checked,row,button,linkButton,safeText,snowflake} from './api.ts';
 import {privateMessage} from './security.ts';
@@ -32,8 +33,9 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
   title='O que precisa configurar?';description='Gerencie pagamentos, cargos, canais e notificações. Escolha uma categoria para continuar.';
   components=[row([nav('Formas de pagamento','pagamentos')]),row([nav('Cargos','cargos'),nav('Canais','canais')]),row([nav('Notificações','notificacoes')]),back()];
  }else if(page==='pagamentos'){
-  title='Formas de pagamento';description=`**Pix no Discord:** ${settings.pix_enabled?'Ligado':'Desligado'}\n**Provedor:** TurbofyPay\n\nO QR Code e o copia e cola são gerados para cada pedido. Pagamentos são confirmados pelo provedor. Para consultar uma cobrança, use /payments com o ID do pedido.`;
-  components=[row([toggle('Vendas Pix','pix_enabled',!!settings.pix_enabled)]),row([linkButton('Configuração de pagamentos','https://nexium-store.vercel.app/admin')]),back()];
+  const status=await paymentConfigStatus(db,input.guild_id);
+  title='Formas de pagamento';description=`**Pix no Discord:** ${settings.pix_enabled?'Ligado':'Desligado'}\n**Provedor:** TurbofyPay\n**Conexão:** ${status.configured?'Configurada':'Aguardando credenciais'} • ${status.source}\n\nUse Configurar Pix para salvar ou substituir o Client ID e o Client Secret neste formulário privado. As credenciais não são exibidas novamente.\n\nO QR Code e o copia e cola são gerados para cada pedido. Pagamentos são confirmados pelo provedor. Para consultar uma cobrança, use /payments com o ID do pedido.`;
+  components=[row([toggle('Vendas Pix','pix_enabled',!!settings.pix_enabled)]),row([button('Configurar Pix','nexium:payment-config:edit')]),back()];
  }else if(page==='cargos'){
   title='Configurar Cargos';description=`**Cliente:** ${ref(settings.role_customer_id)}\n**Suporte:** ${ref(settings.role_support_id)}\nEscolhas manuais de cargos são preservadas pelo organizador.`;
   components=[roleSelect('role_customer_id','Escolher cargo de Cliente'),roleSelect('role_support_id','Escolher cargo de Suporte'),row([toggle('Cliente após pagamento','grant_customer_role_on_paid',!!settings.grant_customer_role_on_paid)]),back()];

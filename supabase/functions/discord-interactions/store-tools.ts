@@ -1,3 +1,4 @@
+import {paymentConfigStatus} from './payment-config.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {actorFor,BotError,checked,discord,safeText,row,button} from './api.ts';
 import {privateMessage} from './security.ts';
@@ -34,7 +35,8 @@ export async function setupChecklist(db:SupabaseClient,input:any,user:string){
  const config=checked(await db.from('discord_bot_settings').select('pix_enabled,channel_sales_id,role_support_id,category_support_id').eq('guild_id',input.guild_id).maybeSingle());
  const products=checked(await db.from('products').select('id,automatic_delivery').eq('active',true));
  const panels=checked(await db.from('discord_sales_panels').select('id').eq('guild_id',input.guild_id).eq('active',true).eq('panel_kind','sales').eq('sync_status','synced'));
- const checks:[boolean,string][]=[[true,'Conta administrativa vinculada'],[!!config?.pix_enabled&&!!Deno.env.get('TURBOFYPAY_CLIENT_ID')&&!!Deno.env.get('TURBOFYPAY_CLIENT_SECRET'),'Pix ativado e credenciais configuradas'],[!!config?.channel_sales_id,'Canal de vendas escolhido'],[!!config?.role_support_id&&!!config?.category_support_id,'Equipe e categoria de tickets configuradas'],[products.length>0,'Produtos cadastrados'],[panels.length>0,'Painéis publicados']];
+ const payment=await paymentConfigStatus(db,input.guild_id);
+ const checks:[boolean,string][]=[[true,'Conta administrativa vinculada'],[!!config?.pix_enabled&&payment.configured,'Pix ativado e credenciais configuradas'],[!!config?.channel_sales_id,'Canal de vendas escolhido'],[!!config?.role_support_id&&!!config?.category_support_id,'Equipe e categoria de tickets configuradas'],[products.length>0,'Produtos cadastrados'],[panels.length>0,'Painéis publicados']];
  return {...privateMessage(`**Configuração da Nexium Store**\n${checks.map(([ok,label])=>`${ok?'✅':'⬜'} ${label}`).join('\n')}\n\n${checks.filter(([ok])=>ok).length}/${checks.length} etapas concluídas. Configure cargo ou arquivo com /produto-entrega; keys com /gerenciar_stock.\nIA administrativa: /loja-ia texto:...`),components:[row([{type:8,custom_id:'nexium:store:sales-channel',channel_types:[0,5],placeholder:'Escolher canal de vendas',min_values:1,max_values:1}]),row([button('Cadastrar produto','nexium:store:create'),button('Configurações','nexium:botconfig:tab:home',2),button('Atualizar checklist','nexium:store:checklist',2)])]};
 }
 export async function setSalesChannel(db:SupabaseClient,input:any,user:string){

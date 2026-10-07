@@ -1,3 +1,4 @@
+import {paymentConfigModal,savePaymentConfig} from './payment-config.ts';
 import {createProductModal,submitCreatedProduct} from './store-tools.ts';
 import {productRequestModal,submitProductRequest} from './product-requests.ts';
 import {ticketModal,submitTicketModal} from './ticket-ui.ts';
@@ -23,7 +24,7 @@ Deno.serve(async(req:Request)=>{
   if(input.application_id!==applicationId || input.guild_id!==config.data.guild_id)return json({error:'WRONG_APPLICATION_OR_GUILD'},403);
   const userId=input.member?.user?.id;
   if(!/^[0-9]{17,20}$/.test(input.id||'') || !/^[0-9]{17,20}$/.test(userId||'') || typeof input.token!=='string' || !/^[A-Za-z0-9._-]{1,512}$/.test(input.token))return json({error:'INVALID_INTERACTION'},400);
-  try{const modal=await createProductModal(db,input,userId)||await productRequestModal(db,input)||await ticketModal(db,input,userId)||await restockModal(db,input,userId);if(modal)return json(modal);}catch(error){const code=error instanceof BotError?error.code:'INTERNAL_ERROR';return json({type:4,data:{content:errorMessages[code]||'Não foi possível abrir o formulário.',flags:64,allowed_mentions:{parse:[]}}});}
+  try{const modal=await paymentConfigModal(db,input,userId)||await createProductModal(db,input,userId)||await productRequestModal(db,input)||await ticketModal(db,input,userId)||await restockModal(db,input,userId);if(modal)return json(modal);}catch(error){const code=error instanceof BotError?error.code:'INTERNAL_ERROR';return json({type:4,data:{content:errorMessages[code]||'Não foi possível abrir o formulário.',flags:64,allowed_mentions:{parse:[]}}});}
   const action=eventAction(input);
   const receipt=await db.from('discord_interaction_events').insert({interaction_id:input.id,guild_id:input.guild_id,discord_user_id:userId,action});
   if(receipt.error)return json({error:receipt.error.code==='23505'?'INTERACTION_ALREADY_RECEIVED':'DATABASE_ERROR'},receipt.error.code==='23505'?409:500);
@@ -31,7 +32,7 @@ Deno.serve(async(req:Request)=>{
   EdgeRuntime.waitUntil((async()=>{
     let message=privateMessage('Não foi possível consultar agora. Tente novamente.');let code='INTERNAL_ERROR';
     try{
-      message=input.type===5&&input.data?.custom_id==='nexium:store:create-submit'?await submitCreatedProduct(db,input,userId):input.type===5&&String(input.data?.custom_id).startsWith('nexium:stock-request-submit:')?await submitProductRequest(db,input,userId):input.type===5&&String(input.data?.custom_id).startsWith('nexium:restock:')?await saveRestock(db,input,userId):input.type===5?await submitTicketModal(db,input,userId):await route(db,input,userId);code='ACTION_OK';
+      message=input.type===5&&input.data?.custom_id==='nexium:payment-config:save'?await savePaymentConfig(db,input,userId):input.type===5&&input.data?.custom_id==='nexium:store:create-submit'?await submitCreatedProduct(db,input,userId):input.type===5&&String(input.data?.custom_id).startsWith('nexium:stock-request-submit:')?await submitProductRequest(db,input,userId):input.type===5&&String(input.data?.custom_id).startsWith('nexium:restock:')?await saveRestock(db,input,userId):input.type===5?await submitTicketModal(db,input,userId):await route(db,input,userId);code='ACTION_OK';
     }catch(error){code=error instanceof BotError?error.code:'INTERNAL_ERROR';message=privateMessage(errorMessages[code]||'Não foi possível concluir esta ação agora. Consulte o suporte.');}
     // Interaction token is kept only in this request's memory, never in audit records.
     let delivered=false;
