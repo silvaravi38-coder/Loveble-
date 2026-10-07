@@ -6,11 +6,18 @@ import {deliverResponse,qrAttachment} from '../supabase/functions/discord-intera
 import {route,eventAction,commandParts} from '../supabase/functions/discord-interactions/router.ts';
 import {restockUnits,restockModal} from '../supabase/functions/discord-interactions/restock.ts';
 import {lockOverwrites,canonicalOverwrites} from '../supabase/functions/discord-interactions/moderation.ts';
-import {authorisedOrderContext} from '../supabase/functions/discord-interactions/ai.ts';
+import {authorisedOrderContext,aiErrorCode} from '../supabase/functions/discord-interactions/ai.ts';
 import {scheduledDate} from '../supabase/functions/discord-interactions/schedules.ts';
 import {sendScheduled} from '../supabase/functions/discord-scheduler/worker.ts';
 import {ownerChatMessages,pollTicketChat} from '../supabase/functions/discord-scheduler/ticket-chat.ts';
 import {discord,fortalezaMonthStart} from '../supabase/functions/discord-interactions/api.ts';
+test('AI gateway billing and nested provider failures have actionable codes without exposing secrets',()=>{
+ assert.equal(aiErrorCode({statusCode:500,message:'AI Gateway requires a valid credit card on file to service requests.'}),'AI_BILLING_REQUIRED');
+ assert.equal(aiErrorCode({cause:{statusCode:401,message:'secret'}}),'AI_PROVIDER_UNAUTHORIZED');
+ assert.equal(aiErrorCode({statusCode:402}),'AI_PROVIDER_CREDITS_REQUIRED');
+ assert.equal(aiErrorCode({statusCode:400}),'AI_INVALID_REQUEST');
+ assert.equal(aiErrorCode({message:'sensitive unknown error'}),'AI_PROVIDER_ERROR');
+});
 test('ticket chat accepts only fresh owner messages and sorts Discord snowflakes numerically',()=>{
  const owner='796455570197577759',base={type:0,author:{id:owner},content:'Oi'};
  const msgs=[{...base,id:'1557242989489950722'},{...base,id:'1557242989489950721'},{...base,id:'1557242989489950720'}, {...base,id:'1557242989489950723',author:{id:owner,bot:true}}, {...base,id:'1557242989489950724',author:{id:'other'}}, {...base,id:'1557242989489950725',webhook_id:'hook'}];
@@ -23,7 +30,7 @@ test('ticket chat verifies channel ownership, honours atomic deduplication and r
  let channel={guild_id:'guild',type:0,topic:'Nexium ticket ticket'};
  let messages=[{id:'1557242989489950721',type:0,author:{id:'owner'},content:'Oi',timestamp:new Date().toISOString()}];
  const send=async(path)=>path.includes('/messages?')?messages:channel,reply=async()=>{replies++};
- assert.equal(await pollTicketChat(db,record,send,reply),null);assert.equal(imports,1);assert.equal(replies,0);
+ assert.equal(await pollTicketChat(db,record,send,reply),null);assert.equal(imports,1);assert.equal(replies,0);assert.equal('last_error' in updates[0],false);
  messages[0].content='';assert.equal(await pollTicketChat(db,record,send,reply),'MESSAGE_CONTENT_REQUIRED');assert.equal(imports,1);
  channel.topic='other';assert.equal(await pollTicketChat(db,record,send,reply),'WRONG_TICKET_CHANNEL');assert.equal(imports,1);assert.equal(updates.at(-1).lease,null);
 });

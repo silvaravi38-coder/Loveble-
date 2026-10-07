@@ -131,3 +131,9 @@ The private AI configuration panel exposes suggestion and automatic response mod
 Validation: 83 Node tests, strict backend TypeScript, manual-quantity SQL fixtures and existing commerce/store-tools rollback suites pass.
 
 Chat validation: 85 Node tests, strict backend TypeScript, private lease/deduplication/claimed-ticket SQL fixture with rollback; scheduler HTTP 200 and live redaction diagnostic verified. New cursor table has RLS with no public grants/policies by design (backend only; https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
+
+## AI provider diagnostic — 2026-10-07
+
+The reporting ticket's live generation reached AI Gateway, which rejected the request because a valid credit card must be on file to unlock credits. This is now classified as `AI_BILLING_REQUIRED` and shown in the Discord AI panel with the provider's account setup link. Provider authentication, credit, request and rate-limit errors have explicit codes; nested causes are checked. Audit events contain stage/code/error class only. Idle chat polls preserve the last failure until an actual successful reply. The private scheduler capability supports a diagnostic replay only for an unclaimed, open ticket owned by a linked administrator, using existing quota/ownership checks. Diagnostic responses expose only a code; raw provider messages and secrets are not stored in audit logs. No card, key, billing balance or budget was created or changed.
+
+Validation: live rejection verified; strict backend check and 86 Node tests pass. Completion remains blocked on the user's AI Gateway account activation.
