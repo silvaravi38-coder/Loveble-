@@ -173,3 +173,14 @@ test('announcements validate guild and suppress mentions with an interaction non
   await assert.rejects(()=>announce(db,input,'admin',{texto:' '.repeat(3)}),e=>e.code==='INVALID_ANNOUNCEMENT');
  }finally{globalThis.fetch=previousFetch;globalThis.Deno=previousDeno;}
 });
+
+
+test('command registration honors explicit rate limits without retrying validation or uncertain writes',async()=>{
+ const {registerCommands}=await import('../supabase/functions/discord-executor/runtime.ts');
+ const waits=[];let calls=0;
+ const definitions=[{name:'admin'},{name:'meu_perfil'}];
+ const fetcher=async()=>{calls++;return calls===1?new Response(JSON.stringify({retry_after:0.5}),{status:429}):new Response(JSON.stringify({id:String(calls)}));};
+ const result=await registerCommands('app','guild','test-token',definitions,fetcher,async ms=>{waits.push(ms)});assert.equal(result.length,2);assert.equal(calls,3);assert.deepEqual(waits,[500]);
+ calls=0;await assert.rejects(()=>registerCommands('app','guild','test-token',definitions,async()=>{calls++;return new Response('{}',{status:400})}),e=>e.code==='COMMAND_REGISTRATION_400_admin');assert.equal(calls,1);
+ calls=0;await assert.rejects(()=>registerCommands('app','guild','test-token',definitions,async()=>{calls++;throw Error('timeout')}),e=>e.code==='COMMAND_REGISTRATION_UNCERTAIN_admin');assert.equal(calls,1);
+});
