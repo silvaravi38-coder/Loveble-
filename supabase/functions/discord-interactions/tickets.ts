@@ -83,7 +83,7 @@ export async function actTicket(db:SupabaseClient,input:any,userId:string,action
   const owner=checked(await db.from('discord_account_links').select('discord_user_id').eq('profile_id',view.ticket.user_id).single());
   // Archive in place: preserve channel/messages, disable customer sending.
   await discord(`/channels/${channelId}/permissions/${owner.discord_user_id}`,'PUT',{type:1,allow:'66560',deny:'2048'});
-  await discord(`/channels/${channelId}/messages`,'POST',{content:`Atendimento encerrado: ${safeText(options.reason,500)}\nResultado: ${action==='cancel'?'cancelled':options.outcome}. Para avaliar, use /ticket avaliar.`,allowed_mentions:{parse:[]}});
+  await discord(`/channels/${channelId}/messages`,'POST',{content:action==='cancel'?`🚪 **Atendimento encerrado**\n\nEste ticket foi cancelado. O histórico do atendimento foi preservado.`:`✅ **Atendimento finalizado**\n\nObrigado por utilizar o suporte da **Nexium Store**.\n⭐ Você já pode avaliar o atendimento usando o botão **Avaliar** abaixo.`,allowed_mentions:{parse:[]}});
  }
  if(action==='transcript'){
   if(channelId&&!view.discord.deleted_at)await captureTranscript(db,id,channelId,actor.id);
@@ -92,5 +92,14 @@ export async function actTicket(db:SupabaseClient,input:any,userId:string,action
   const latest=transcript?.messages?.slice(-10)||siteMessages;
   return {...privateMessage(`Histórico #${id.slice(0,8)}${transcript&&!transcript.complete?' (captura parcial)':''}\n`+latest.map((m:any)=>`${safeText(m.author_name||m.sender_name,60)}: ${safeText(m.content||m.message,130)}`).join('\n')+'\nHistórico permanente guardado no backend; anexos são referências, não cópias dos arquivos.'),files:[{name:`ticket-${id}.json`,type:'application/json',content:JSON.stringify({ticket_id:id,ticket:view.ticket,closure:view.discord,complete:transcript?.complete??false,messages:transcript?.messages||siteMessages},null,2)}]};
  }
- return privateMessage(`Ticket ${id}\nStatus: ${result.ticket.status}\nDuração: ${Math.max(0,Math.round(((result.discord.closed_at?Date.parse(result.discord.closed_at):Date.now())-Date.parse(result.ticket.created_at))/60000))} min\nPrioridade: ${result.ticket.priority}\nAtendente: ${result.ticket.assigned_to||'Não assumido'}\n${action==='close'?'Finalização registrada. Só o resultado resolvido entra nas métricas de remuneração.':'Ação registrada: '+action}`);
+ const minutes=Math.max(0,Math.round(((result.discord.closed_at?Date.parse(result.discord.closed_at):Date.now())-Date.parse(result.ticket.created_at))/60000));
+ const priority:Record<string,string>={low:'Baixa',normal:'Normal',high:'Alta',urgent:'Urgente'};
+ if(action==='close')return privateMessage(`✅ **Atendimento finalizado!**\n\nSeu ticket foi encerrado com sucesso.\n📌 **Status:** ${options.outcome==='resolved'?'Resolvido':'Encerrado'}\n⏱️ **Duração:** ${minutes} min\n⭐ Você já pode avaliar o atendimento pelo botão **Avaliar**.`);
+ if(action==='cancel')return privateMessage('🚪 **Ticket encerrado.**\n\nO atendimento foi cancelado e o histórico foi salvo.');
+ if(action==='priority')return privateMessage(`⚡ **Prioridade atualizada:** ${priority[result.ticket.priority]||'Normal'}.`);
+ if(action==='transfer')return privateMessage('🔄 **Atendimento transferido com sucesso.**');
+ if(action==='add_member')return privateMessage('➕ **Membro adicionado ao atendimento.**');
+ if(action==='remove_member')return privateMessage('➖ **Membro removido do atendimento.**');
+ if(action==='rating')return privateMessage('⭐ **Avaliação enviada. Obrigado pelo feedback!**');
+ return privateMessage('✅ **Ação concluída com sucesso.**');
 }
