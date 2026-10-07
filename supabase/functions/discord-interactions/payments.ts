@@ -1,3 +1,4 @@
+import {fulfilProductDeliveries} from './product-fulfilment.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,uuid,actorFor,row,button,linkButton,discord,audit} from './api.ts';
 import {privateMessage} from './security.ts';
@@ -21,6 +22,8 @@ export async function fulfilPaid(db:SupabaseClient,orderId:string) {
  const request=checked(await db.from('discord_checkout_requests').select('*').eq('order_id',orderId).single());
  const ord=checked(await db.from('orders').select('user_id,status').eq('id',orderId).single());
  if(!['paid','processing','delivered'].includes(ord.status))return;
+ await fulfilProductDeliveries(db,orderId);
+ const refreshed=checked(await db.from('orders').select('status').eq('id',orderId).single());ord.status=refreshed.status;
  const config=checked(await db.from('discord_bot_settings').select('*').eq('guild_id',request.guild_id).maybeSingle());
  if(config?.grant_customer_role_on_paid&&config.role_customer_id){
   const roles=await discord(`/guilds/${request.guild_id}/roles`),member=await discord(`/guilds/${request.guild_id}/members/1557132199227031552`);

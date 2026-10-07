@@ -1,3 +1,4 @@
+import {reusableDelivery} from './product-fulfilment.ts';
 import {ticketPanel} from './ticket-ui.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,discord,audit,row,button,linkButton,safeText,productFor,uuid} from './api.ts';
@@ -7,10 +8,11 @@ export async function catalogue(db:SupabaseClient) {
  const products=checked(await db.from('products').select('id,name,price').eq('active',true).order('name').limit(25)) as any[];
  return {...privateMessage('Catálogo Nexium — selecione um produto para ver detalhes.'),components:products.length?[row([{type:3,custom_id:'nexium:catalog:v1',placeholder:'Escolher produto',options:products.map(p=>({label:safeText(p.name,100),value:p.id,description:`A partir de ${money(p.price)}`}))}])]:[]};
 }
-export async function productDetails(db:SupabaseClient,term:string,panelId?:string) {
+export async function productDetails(db:SupabaseClient,term:string,panelId?:string,guild?:string) {
  const p=await productFor(db,term),variants=checked(await db.from('product_variants').select('id,name,price,stock').eq('product_id',p.id).eq('active',true).order('price')) as any[];
  const stock=await db.from('supplier_stock_items').select('id',{count:'exact',head:true}).eq('product_id',p.id).eq('status','available');if(stock.error)throw new BotError('DATABASE_ERROR');
- const available=!p.automatic_delivery||(stock.count||0)>0;
+ const template=p.automatic_delivery?await reusableDelivery(db,guild,p.id):null;
+ const available=!!template||!p.automatic_delivery||(stock.count||0)>0;
  const components:unknown[]=[];
  if(available){
    if(variants.length)components.push(row([{type:3,custom_id:`nexium:variant:${p.id}:${panelId||'direct'}`,placeholder:'Escolher opção para comprar',options:variants.slice(0,25).map(v=>({label:safeText(`${v.name} — ${money(v.price)}`,100),value:v.id,description:v.stock>0?'Disponível':'Sem estoque'}))}]));
@@ -27,12 +29,13 @@ export async function panelPayload(db:SupabaseClient,panel:any,disabled=false) {
   const p=products[0];
   const variants=checked(await db.from('product_variants').select('id,name,price,stock').eq('product_id',p.id).eq('active',true).order('price')) as any[];
   const stock=await db.from('supplier_stock_items').select('id',{count:'exact',head:true}).eq('product_id',p.id).eq('status','available');if(stock.error)throw new BotError('DATABASE_ERROR');
-  const remaining=p.automatic_delivery?(stock.count||0):null;
+  const template=p.automatic_delivery?await reusableDelivery(db,panel.guild_id,p.id):null;
+  const remaining=p.automatic_delivery&&!template?(stock.count||0):null;
   const plans=variants.slice(0,15).map(v=>`${safeText(v.name,65)} — ${money(v.price)}${v.stock<1?' • Sem estoque':''}`).join('\n');
   const available=remaining===null||remaining>0;
   const components=variants.length?[row([{type:3,custom_id:`nexium:panel:${panel.id}`,placeholder:'Ver planos e comprar com PIX',options:[{label:safeText(p.name,100),value:p.id}]}])]:[row([{...button('Comprar com PIX',`nexium:buy:${p.id}:${panel.id}`),disabled:!available}])];
   components.push(row([linkButton('Ver no site',`https://nexium-store.vercel.app/?product=${encodeURIComponent(p.slug||p.id)}`)]));
-  return {content:null,allowed_mentions:{parse:[]},embeds:[{title:safeText(p.name,200),description:safeText(p.description,2000),color:0xe3e5e8,...(p.image_url?{image:{url:p.image_url}}:{}),fields:[{name:'Valor',value:`${variants.length?'A partir de ':''}${money(variants.length?Math.min(...variants.map(v=>Number(v.price))):p.price)}`,inline:true},{name:'Estoque',value:remaining===null?'Entrega manual':String(remaining),inline:true},...(plans?[{name:'Planos disponíveis',value:plans.slice(0,1024)}]:[])],footer:{text:'Nexium Store • Preço e estoque conferidos na compra'},timestamp:new Date().toISOString()}],components};
+  return {content:null,allowed_mentions:{parse:[]},embeds:[{title:safeText(p.name,200),description:safeText(p.description,2000),color:0xe3e5e8,...(p.image_url?{image:{url:p.image_url}}:{}),fields:[{name:'Valor',value:`${variants.length?'A partir de ':''}${money(variants.length?Math.min(...variants.map(v=>Number(v.price))):p.price)}`,inline:true},{name:'Estoque',value:template?template.kind==='role'?'Cargo automático':'Arquivo automático':remaining===null?'Entrega manual':String(remaining),inline:true},...(plans?[{name:'Planos disponíveis',value:plans.slice(0,1024)}]:[])],footer:{text:'Nexium Store • Preço e estoque conferidos na compra'},timestamp:new Date().toISOString()}],components};
  }
  return {content:null,allowed_mentions:{parse:[]},embeds:[{title:safeText(panel.name,200),description:disabled?'Este painel está despublicado.':products.map(p=>`• **${safeText(p.name,120)}** — ${money(p.price)}`).join('\n')||'Nenhum produto disponível.',color:0xe3e5e8,footer:{text:'Nexium Store • Catálogo atualizado pelo backend'}}],components:disabled||!products.length?[]:[row([{type:3,custom_id:`nexium:panel:${panel.id}`,placeholder:'Selecione um produto',options:products.map(p=>({label:safeText(p.name,100),value:p.id,description:`A partir de ${money(p.price)}`}))}])]};
 }

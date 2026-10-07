@@ -1,3 +1,6 @@
+import {setupChecklist,setSalesChannel} from './store-tools.ts';
+import {storeAi,applyStoreProposal} from './store-ai.ts';
+import {configureProductDelivery} from './product-fulfilment.ts';
 import {financeMessage} from './finance-ui.ts';
 import {storeDiagnostics} from './diagnostics.ts';
 import {botConfigPanel,botConfigAction} from './bot-config.ts';
@@ -33,12 +36,15 @@ async function ownedPanel(db:SupabaseClient,input:any,panelId:string,productId:s
 async function orders(db:SupabaseClient,userId:string) {const actor=await actorFor(db,userId);return orderMessage(checked(await db.from('orders').select('id,status,created_at').eq('user_id',actor.id).order('created_at',{ascending:false}).limit(5)));}
 async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Record<string,any>) {
  const actor=await actorFor(db,userId);if(actor.role!=='admin')throw new BotError('FORBIDDEN');
+ if(sub==='checklist')return setupChecklist(db,input,userId);
+ if(sub==='store-ai')return storeAi(db,input,userId,o.texto);
+ if(sub==='product-delivery')return configureProductDelivery(db,input,userId,o);
  if(sub==='diagnostico')return storeDiagnostics(db,input.guild_id);
  if(sub==='dashboard')return adminDashboard();
  if(sub==='anunciar')return announce(db,input,actor.id,o);
  if(sub==='painel-estoque')return refreshStockRequestPanel(db,input,actor.id);
  if(sub==='ranking-produtos')return productRanking(db,actor.id,o.periodo);
- if(sub==='produto'){const details=await productDetails(db,o.produto);return {...details,content:'Gestão de produtos e variantes: https://nexium-store.vercel.app/admin'};}
+ if(sub==='produto'){const details=await productDetails(db,o.produto,undefined,input.guild_id);return {...details,content:'Gestão de produtos e variantes: https://nexium-store.vercel.app/admin'};}
  if(['agendar','mensagens','cancelar-mensagem'].includes(sub))return manageSchedules(db,input,userId,sub,o);
  if(sub==='ia')return configureAi(db,input,userId,o);
  if(sub==='lock'||sub==='unlock')return previewChannelControl(db,input,userId,sub);
@@ -101,16 +107,17 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
 export async function route(db:SupabaseClient,input:any,userId:string) {
  if(input.type===3){
   const parts=String(input.data.custom_id).split(':');
+  if(parts[1]==='store'){if(parts[2]==='checklist')return setupChecklist(db,input,userId);if(parts[2]==='sales-channel')return setSalesChannel(db,input,userId);if(['ai-apply','ai-discard'].includes(parts[2]))return applyStoreProposal(db,input,userId,parts[3],parts[2]==='ai-discard');throw new BotError('UNSUPPORTED_ACTION');}
   if(String(input.data.custom_id).startsWith('nexium:botconfig:'))return botConfigAction(db,input,userId,(sub,o)=>admin(db,input,userId,sub,o));
   if(input.data.custom_id==='nexium:admin-menu:v1'){const action=input.data.values?.[0];if(!['estoque','paineis','financeiro','configurar'].includes(action))throw new BotError('UNSUPPORTED_ACTION');return admin(db,input,userId,action==='configurar'?'dashboard':action,{});}
   if(input.data.custom_id==='nexium:my-orders:v1')return orders(db,userId);
-  if(input.data.custom_id==='nexium:catalog:v1')return productDetails(db,input.data.values?.[0]||'');
+  if(input.data.custom_id==='nexium:catalog:v1')return productDetails(db,input.data.values?.[0]||'',undefined,input.guild_id);
   if(['ticket-panels','ticket-member','ticket-notify','ticket-staff','ticket-payment','ticket-delete','ticket-delete-confirm','ticket-manage'].includes(parts[1]))return ticketActionButton(db,input,userId,parts[1],parts[2]);
   if(parts[1]==='ticket-open'){
    if(!uuid(parts[2]))throw new BotError('INVALID_ID');const panel=checked(await db.from('discord_sales_panels').select('*').eq('id',parts[2]).eq('guild_id',input.guild_id).eq('channel_id',input.channel_id).eq('active',true).eq('panel_kind','tickets').maybeSingle());
    if(!panel||panel.message_id!==input.message?.id)throw new BotError('PANEL_PRODUCT_MISMATCH');const subject=ticketSubjects.find(s=>s.value===(parts[3]||input.data.values?.[0]));if(!subject)throw new BotError('INVALID_TICKET_FORM');return openTicket(db,input,userId,subject.label);
   }
-  if(parts[1]==='panel'){const product=input.data.values?.[0];await ownedPanel(db,input,parts[2],product,true);return productDetails(db,product,parts[2]);}
+  if(parts[1]==='panel'){const product=input.data.values?.[0];await ownedPanel(db,input,parts[2],product,true);return productDetails(db,product,parts[2],input.guild_id);}
   if(parts[1]==='buy'||parts[1]==='variant'){
    const panel=parts[3]==='direct'?undefined:parts[3];if(panel)await ownedPanel(db,input,panel,parts[2]);
    return startPurchase(db,input,userId,parts[2],parts[1]==='variant'?input.data.values?.[0]:undefined,panel);
@@ -137,7 +144,7 @@ export async function route(db:SupabaseClient,input:any,userId:string) {
  if(sub==='perfil')return profileCard(db,userId);
  if(sub==='pedidos')return orders(db,userId);
  if(sub==='catalogo')return catalogue(db);
- if(sub==='produto')return productDetails(db,o.produto);
+ if(sub==='produto')return productDetails(db,o.produto,undefined,input.guild_id);
  if(sub==='comprar'){const p=await productFor(db,o.produto);return startPurchase(db,input,userId,p.id,o.variante,undefined,o.cupom);}
  if(sub==='pagamento')return paymentStatus(db,userId,o.pedido);
  if(sub==='entrega'){
@@ -149,5 +156,5 @@ export async function route(db:SupabaseClient,input:any,userId:string) {
  if(sub==='suporte')return openTicket(db,input,userId,o.motivo,o.pedido);
  throw new BotError('UNSUPPORTED_ACTION');
 }
-export const errorMessages:Record<string,string>={PRODUCT_REQUIRED:'Informe o produto para repor o estoque.',INVALID_ANNOUNCEMENT:'Informe um anúncio de 1 a 1800 caracteres.',STOCK_PANEL_NOT_CONFIGURED:'O painel de solicitar estoque ainda não está mapeado neste servidor.',REQUEST_COOLDOWN:'Aguarde 3 minutos entre solicitações de produtos.',INVALID_REFERENCE_URL:'Informe um link de referência válido (http ou https).',
+export const errorMessages:Record<string,string>={INVALID_PRODUCT:'Informe nome, descrição, preço positivo com até duas casas decimais e entrega manual ou key.',INVALID_DELIVERY_FILE:'Envie um anexo válido do Discord, com até 10 MB.',PROTECTED_DELIVERY_ROLE:'Escolha um cargo comum abaixo do bot, sem permissões administrativas e sem acesso de staff.',AI_PROPOSAL_EXPIRED:'Proposta expirada ou já usada. Peça uma nova à IA.',INVALID_AI_PROPOSAL:'A IA não preparou uma ação válida. Especifique produto, preço e entrega ou a configuração desejada.',AI_PROVIDER_ERROR:'O provedor da IA não respondeu. Nenhuma ação foi aplicada.',DELIVERY_FILE_MISSING:'Arquivo de entrega indisponível; procure o administrador.',PRODUCT_REQUIRED:'Informe o produto para repor o estoque.',INVALID_ANNOUNCEMENT:'Informe um anúncio de 1 a 1800 caracteres.',STOCK_PANEL_NOT_CONFIGURED:'O painel de solicitar estoque ainda não está mapeado neste servidor.',REQUEST_COOLDOWN:'Aguarde 3 minutos entre solicitações de produtos.',INVALID_REFERENCE_URL:'Informe um link de referência válido (http ou https).',
  TICKET_PAYMENT_OWNER_REQUIRED:'O pagamento deve ser aberto pelo próprio cliente. Oriente-o a clicar neste botão; nenhuma cobrança foi criada para o atendente.',TICKET_CLOSE_BEFORE_DELETE:'Finalize ou cancele o atendimento primeiro. Depois gere o preview de exclusão.',PROTECTED_TICKET_CHANNEL:'Somente um canal de ticket criado pela Nexium, íntegro e encerrado, pode ser excluído.',TRANSCRIPT_PARTIAL_DELETE_BLOCKED:'Transcript parcial: exclusão bloqueada. Preserve o canal e solicite revisão do administrador.',INVALID_TICKET_FORM:'Preencha o motivo e selecione uma opção válida. O pedido é opcional e deve usar o ID completo.',TICKET_ALREADY_CLOSED:'Este atendimento já está encerrado. Consulte os detalhes ou abra um novo ticket.',SCHEDULE_DATE_REQUIRED:'Informe data futura com fuso: 2026-10-07T12:00:00-03:00. Mínimo um minuto de antecedência.',SCHEDULE_NOT_QUEUED:'Só mensagens ainda na fila podem ser canceladas.', PAYMENT_DISABLED:'O PIX Discord está desligado nas configurações da loja.', AI_KEY_REQUIRED:'A IA precisa de AI_GATEWAY_API_KEY nos secrets do Supabase. Não envie essa chave no chat.',AI_DISABLED:'A IA está desligada.',AI_PAUSED:'A IA automática está pausada neste ticket.',AI_LIMIT_REACHED:'O limite de IA desta hora foi atingido.', CHANNEL_CHANGED_REVIEW_REQUIRED:'As permissões mudaram. Nenhuma alteração foi aplicada; gere um novo preview.',CHANNEL_ALREADY_LOCKED:'Este canal já está bloqueado pela Nexium. Use unlock para restaurar o backup.',CONTROL_PREVIEW_EXPIRED:'Preview expirado ou já usado. Gere um novo preview.',CHANNEL_LOCK_BACKUP_REQUIRED:'Não existe backup de bloqueio Nexium para este canal.', DUPLICATE_STOCK:'Essa reposição contém uma unidade já cadastrada. Nenhuma unidade foi adicionada.',INVALID_STOCK:'Informe entre 1 e 50 unidades reais diferentes, uma por linha.', LINK_REQUIRED:'Conecte sua conta Discord em https://nexium-store.vercel.app → Minha conta.',FORBIDDEN:'Seu perfil não tem permissão para esta ação.',OUT_OF_STOCK:'Este produto está sem estoque. Nenhuma cobrança PIX foi criada.',VARIANT_UNAVAILABLE:'Esta opção está sem estoque.',VARIANT_REQUIRED:'Selecione uma opção em /nexium produto.',COUPON_UNAVAILABLE:'Cupom inválido, expirado ou sem usos disponíveis.',TOO_MANY_PENDING_ORDERS:'Você já tem três pedidos pendentes. Consulte /nexium pedidos.',PAYMENT_NOT_CONFIGURED:'O PIX ainda aguarda configuração do responsável pela loja.',PAYMENT_RESULT_UNCERTAIN:'O provedor não respondeu a tempo. Não repita a compra; procure o suporte para reconciliar o pedido.',PAYMENT_CREDENTIALS_INVALID:'O provedor recusou as credenciais da loja. Nenhum pagamento foi confirmado.',AMBIGUOUS_PRODUCT:'Encontrei mais de um produto. Informe o nome completo, slug ou ID.',PRODUCT_UNAVAILABLE:'Produto indisponível.',ORDER_NOT_OWNED:'Esse pedido não pertence à sua conta.',INVALID_ID:'Informe o ID completo correto.',ALREADY_ASSIGNED:'Este ticket já está com outro atendente.',CLAIM_REQUIRED:'Assuma o ticket antes de alterar ou finalizar.',TICKET_ID_REQUIRED:'Use este comando no canal do ticket ou informe o ID completo.',TICKET_NOT_FOUND:'Ticket não encontrado neste servidor.',STAFF_NOT_AUTHORIZED:'O atendente precisa de conta vinculada e cargo de suporte/admin no site.',TOO_MANY_OPEN_TICKETS:'Você já tem três tickets abertos.',RATING_NOT_ALLOWED:'Somente o cliente pode avaliar seu ticket encerrado.',CLOSE_REASON_REQUIRED:'Informe um motivo de pelo menos três caracteres e o resultado real.',PROTECTED_TICKET_MEMBER:'O cliente dono do ticket e o bot não podem ser removidos.',DISCORD_PERMISSION_DENIED:'O Discord recusou a permissão do bot para esta ação.',PANEL_BUSY_REVIEW:'Painel em processamento ou com resultado incerto. O administrador precisa revisar antes de repetir.',PANEL_PRODUCT_MISMATCH:'Esse painel está desativado ou não oferece mais esse produto.',MUTATION_UNCERTAIN:'O Discord não confirmou o resultado. Não repita a operação; solicite revisão do administrador.'};

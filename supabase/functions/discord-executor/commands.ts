@@ -38,6 +38,7 @@ const groupedCommands=[
 
 // Familiar shortcuts reuse the same handlers, authorization and checkout protections.
 export const commandAliases:Record<string,{command:string;sub:string}>={
+ configurar:{command:'nexium-admin',sub:'checklist'},'loja-ia':{command:'nexium-admin',sub:'store-ai'},'produto-entrega':{command:'nexium-admin',sub:'product-delivery'},
  admin:{command:'nexium-admin',sub:'dashboard'},botconfig:{command:'nexium-admin',sub:'configurar'},
  cupom:{command:'nexium-admin',sub:'cupom'},lock:{command:'nexium-admin',sub:'lock'},unlock:{command:'nexium-admin',sub:'unlock'},
  'meus-pedidos':{command:'nexium',sub:'pedidos'},meu_perfil:{command:'nexium',sub:'perfil'},
@@ -52,6 +53,10 @@ function shortcut(name:string,description:string,options:any[]=[]){
 }
 function existingOptions(command:string,subName:string):any[]{return groupedCommands.find(c=>c.name===command)!.options.find(s=>s.name===subName)!.options;}
 export const nexiumCommands=[...groupedCommands,
+ {name:'criar',type:1,description:'Cadastrar produtos da Nexium',default_member_permissions:'32',options:[sub('produto','Abrir formulário de cadastro e publicar produto')]},
+ shortcut('configurar','Abrir checklist guiado da loja'),
+ shortcut('loja-ia','Gerenciar produtos e configurações por IA',[string('texto','Pedido para a IA administrativa',true)]),
+ shortcut('produto-entrega','Configurar entrega automática de produto',[string('produto','Nome, slug ou ID',true),{...string('tipo','Forma de entrega',true),choices:[{name:'Manual',value:'manual'},{name:'Key do estoque',value:'key'},{name:'Cargo Discord',value:'role'},{name:'Arquivo privado',value:'file'}]},{type:8,name:'cargo',description:'Cargo a entregar (tipo Cargo)'},{type:11,name:'arquivo',description:'Arquivo a entregar, até 10 MB (tipo Arquivo)'}]),
  shortcut('admin','Abrir a central administrativa privada'),
  shortcut('botconfig','Configurar o bot Nexium',existingOptions('nexium-admin','configurar')),
  shortcut('cupom','Criar cupom de desconto',existingOptions('nexium-admin','cupom')),

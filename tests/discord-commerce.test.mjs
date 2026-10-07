@@ -14,7 +14,7 @@ test('Discord manifest conforms to command limits and keeps mandatory options be
  const names=new Set();let count=0;
  function validateOptions(options){assert(options.length<=25);let optional=false;for(const o of options){assert.match(o.name,/^[a-z0-9_-]{1,32}$/);assert(o.description.length<=100);if(o.type===1){count++;validateOptions(o.options);continue;}if(o.required)assert.equal(optional,false,o.name);else optional=true;}}
  for(const c of nexiumCommands){assert(!names.has(c.name));names.add(c.name);assert.match(c.name,/^[a-z0-9_-]{1,32}$/);assert(c.description.length<=100);validateOptions(c.options);}
- assert.equal(count,48);assert.equal(nexiumCommands.length,19);assert.equal(nexiumCommands.find(c=>c.name==='nexium-admin').default_member_permissions,'32');
+ assert.equal(count,49);assert.equal(nexiumCommands.length,23);assert.equal(nexiumCommands.find(c=>c.name==='nexium-admin').default_member_permissions,'32');
  for(const [name,target] of Object.entries(commandAliases))if(target.command==='nexium-admin')assert.equal(nexiumCommands.find(c=>c.name===name).default_member_permissions,'32');
 
 });
@@ -249,4 +249,38 @@ test('finance cards show real revenue and reconciliation separately and retain p
  const result=financeMessage({period:'7days',revenue:100,orders:4,average:25,site_orders:1,discord_orders:3,recorded_costs:10,recorded_fees:2,net_reconciled:30,unreconciled_orders:2,top_products:[]});
  assert.match(result.embeds[0].title,/7 dias/);assert.match(result.embeds[0].description,/4 pedidos/);assert.match(result.embeds[0].fields[1].value,/Pedidos sem custos\/taxas conciliados: 2/);assert.deepEqual(result.allowed_mentions.parse,[]);
  assert(result.components.flatMap(r=>r.components).some(c=>c.custom_id.endsWith(':30days')));
+});
+
+
+test('new store commands parse safely and all administrative routes reject customers',async()=>{
+ for(const name of ['configurar','loja-ia','produto-entrega'])await assert.rejects(()=>route(actorDb('customer'),{type:2,data:{name,options:[]}},'user'),e=>e.code==='FORBIDDEN');
+ const {createProductModal}=await import('../supabase/functions/discord-interactions/store-tools.ts');
+ await assert.rejects(()=>createProductModal(actorDb('customer'),{type:2,data:{name:'criar',options:[{name:'produto'}]}},'user'),e=>e.code==='FORBIDDEN');
+ const modal=await createProductModal(actorDb('admin'),{type:2,data:{name:'criar',options:[{name:'produto'}]}},'user');assert.equal(modal.type,9);assert.equal(modal.data.components.length,4);
+});
+test('product drafts reject invalid prices, hidden delivery modes and oversized content',async()=>{
+ const {productDraft}=await import('../supabase/functions/discord-interactions/store-tools.ts');
+ assert.equal(productDraft('Produto','5,39','Descrição','manual').price,5.39);
+ for(const price of ['0','-1','1.001','Infinity','100001','1e2'])assert.throws(()=>productDraft('Produto',price,'Descrição','manual'),e=>e.code==='INVALID_PRODUCT');
+ assert.throws(()=>productDraft('Produto','1','Descrição','role'));assert.throws(()=>productDraft('Produto','1','x'.repeat(2001),'key'));
+});
+test('paid role delivery cannot grant managed, staff, privileged or higher roles',async()=>{
+ const {validateDeliveryRole}=await import('../supabase/functions/discord-interactions/product-fulfilment.ts');
+ const id='999999999999999991',guild='999999999999999990',bot='999999999999999992';const role={id,position:2,permissions:'0'},roles=[role,{id:bot,position:5}],member={roles:[bot]};
+ assert.equal(validateDeliveryRole(role,roles,member,guild),id);
+ for(const modified of [{managed:true},{position:5},{permissions:'8'},{permissions:String(1n<<28n)}])assert.throws(()=>validateDeliveryRole({...role,...modified},roles,member,guild),e=>e.code==='PROTECTED_DELIVERY_ROLE');
+ assert.throws(()=>validateDeliveryRole(role,roles,member,guild,[id]));
+});
+test('delivery files require resolved bounded Discord attachments and reject arbitrary URLs',async()=>{
+ const {validatedAttachment}=await import('../supabase/functions/discord-interactions/product-fulfilment.ts');
+ const attachment={id:'1',size:10,filename:'file.txt',url:'https://cdn.discordapp.com/attachments/1/2/file.txt'};
+ const input={data:{resolved:{attachments:{'1':attachment}}}};assert.equal(validatedAttachment(input,'1').name,'file.txt');
+ for(const patch of [{size:10485761},{url:'https://example.com/private'},{url:'http://cdn.discordapp.com/attachments/1'},{url:'https://cdn.discordapp.com/not-attachment'}])assert.throws(()=>validatedAttachment({data:{resolved:{attachments:{'1':{...attachment,...patch}}}}},'1'));
+ assert.throws(()=>validatedAttachment(input,'2'));
+});
+test('administrative AI rejects payment, permission and unscoped proposal mutations',async()=>{
+ const {validateStoreProposal,applyStoreProposal}=await import('../supabase/functions/discord-interactions/store-ai.ts');
+ for(const payload of [{kind:'refund'},{kind:'config',field:'role_support_id',value:true},{kind:'config',field:'pix_enabled',value:'true'},{kind:'publish',panel:'fake'}])assert.throws(()=>validateStoreProposal(payload));
+ assert.deepEqual(validateStoreProposal({kind:'config',field:'pix_enabled',value:false}).data,{field:'pix_enabled',value:false});
+ await assert.rejects(()=>applyStoreProposal(actorDb('customer'),{guild_id:'guild'},'user','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
 });
