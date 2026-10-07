@@ -29,9 +29,12 @@ export async function ticketModal(db:SupabaseClient,input:any,user:string){
   return {type:9,data:{custom_id:`nexium:ticket-edit:${id}:${action.slice(7)}`,title:rating?'Avaliar atendimento':'Gerenciar atendimento',components:[{type:18,label:rating?'Sua avaliação':action==='ticket-priority'?'Prioridade':'Selecione o membro',component},...(rating?[textField('comment','Comentário (opcional)',false)]:[])]}};
  }
  if(action==='ticket-open'){
+  // Opening from the public panel is intentionally one-tap: the selected sector becomes
+  // the ticket subject and the private channel is created immediately. Details can be
+  // sent inside the ticket, avoiding a modal before the customer reaches support.
   await actorFor(db,user);const panel=await panelFor(db,input,id,input.message?.id);
-  const subject=input.data.values?.[0]||'other';if(!ticketSubjects.some(s=>s.value===subject))throw new BotError('INVALID_TICKET_FORM');
-  return {type:9,data:{custom_id:`nexium:ticket-new:${panel.id}:${subject}:${panel.message_id}`,title:'Abrir atendimento Nexium',components:[textField('reason','Descreva o que precisa'),textField('order','ID completo do pedido (opcional)',false,36)]}};
+  const subject=input.data.values?.[0]||'other';const sector=ticketSubjects.find(s=>s.value===subject);if(!sector)throw new BotError('INVALID_TICKET_FORM');
+  return openTicket(db,input,user,sector.label);
  }
  if(action==='ticket-close'||action==='ticket-cancel'){
   if(!uuid(id))throw new BotError('INVALID_ID');const actor=await actorFor(db,user),view=await ticketRpc(db,user,input.guild_id,'view',id);
