@@ -9,7 +9,24 @@ import {lockOverwrites,canonicalOverwrites} from '../supabase/functions/discord-
 import {authorisedOrderContext} from '../supabase/functions/discord-interactions/ai.ts';
 import {scheduledDate} from '../supabase/functions/discord-interactions/schedules.ts';
 import {sendScheduled} from '../supabase/functions/discord-scheduler/worker.ts';
+import {ownerChatMessages,pollTicketChat} from '../supabase/functions/discord-scheduler/ticket-chat.ts';
 import {discord,fortalezaMonthStart} from '../supabase/functions/discord-interactions/api.ts';
+test('ticket chat accepts only fresh owner messages and sorts Discord snowflakes numerically',()=>{
+ const owner='796455570197577759',base={type:0,author:{id:owner},content:'Oi'};
+ const msgs=[{...base,id:'1557242989489950722'},{...base,id:'1557242989489950721'},{...base,id:'1557242989489950720'}, {...base,id:'1557242989489950723',author:{id:owner,bot:true}}, {...base,id:'1557242989489950724',author:{id:'other'}}, {...base,id:'1557242989489950725',webhook_id:'hook'}];
+ assert.deepEqual(ownerChatMessages(msgs,owner,'1557242989489950720').map(m=>m.id),['1557242989489950721','1557242989489950722']);
+});
+test('ticket chat verifies channel ownership, honours atomic deduplication and reports redacted content',async()=>{
+ const record={ticket_id:'ticket',channel_id:'channel',guild_id:'guild',discord_user_id:'owner',lease:'lease',cursor:'1557242989489950720'};
+ let imports=0,replies=0,updates=[];
+ const db={rpc:async()=>{imports++;return {data:0,error:null}},from(){return {update(x){updates.push(x);return this},eq(){return this},then(resolve){return Promise.resolve({data:null,error:null}).then(resolve)}}}};
+ let channel={guild_id:'guild',type:0,topic:'Nexium ticket ticket'};
+ let messages=[{id:'1557242989489950721',type:0,author:{id:'owner'},content:'Oi',timestamp:new Date().toISOString()}];
+ const send=async(path)=>path.includes('/messages?')?messages:channel,reply=async()=>{replies++};
+ assert.equal(await pollTicketChat(db,record,send,reply),null);assert.equal(imports,1);assert.equal(replies,0);
+ messages[0].content='';assert.equal(await pollTicketChat(db,record,send,reply),'MESSAGE_CONTENT_REQUIRED');assert.equal(imports,1);
+ channel.topic='other';assert.equal(await pollTicketChat(db,record,send,reply),'WRONG_TICKET_CHANNEL');assert.equal(imports,1);assert.equal(updates.at(-1).lease,null);
+});
 test('Discord manifest conforms to command limits and keeps mandatory options before optional',()=>{
  const names=new Set();let count=0;
  function validateOptions(options){assert(options.length<=25);let optional=false;for(const o of options){assert.match(o.name,/^[a-z0-9_-]{1,32}$/);assert(o.description.length<=100);if(o.type===1){count++;validateOptions(o.options);continue;}if(o.required)assert.equal(optional,false,o.name);else optional=true;}}
@@ -32,7 +49,7 @@ test('PIX attachment accepts PNG and keeps private response with mentions suppre
  let request;await deliverResponse('https://example.invalid',message,async(url,options)=>{request=options;return new Response('{}');});
  assert(request.body instanceof FormData);const data=JSON.parse(request.body.get('payload_json'));assert(!('files' in data));assert.equal(data.attachments[0].filename,'pix.png');assert.equal(request.body.get('files[0]').type,'image/png');
 });
-function actorDb(role){return {from(table){return {select(){return this;},eq(){return this;},maybeSingle:async()=>({data:{profile_id:'profile'},error:null}),single:async()=>({data:{id:'profile',role,full_name:'User'},error:null})};}};}
+function actorDb(role){return {from(table){return {select(){return this;},eq(){return this;},is(){return this;},limit(){return this;},then(resolve){return Promise.resolve({data:[],error:null}).then(resolve);},maybeSingle:async()=>({data:{profile_id:'profile'},error:null}),single:async()=>({data:{id:'profile',role,full_name:'User'},error:null})};}};}
 test('Discord administrator permission alone never elevates a customer profile',async()=>{
  await assert.rejects(()=>route(actorDb('customer'),{type:2,data:{name:'nexium-admin',options:[{name:'estoque'}]}},'discord-user'),e=>e.code==='FORBIDDEN');
 });
@@ -194,7 +211,7 @@ test('botconfig without arguments opens the dashboard without writing settings',
 
 test('every botconfig page fits Discord limits and private responses suppress mentions',async()=>{
  const {botConfigPanel}=await import('../supabase/functions/discord-interactions/bot-config.ts');
- const db={from(table){return{select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{pix_enabled:true},error:null}),single:async()=>({data:{id:'admin',role:'admin',full_name:'Ariel'},error:null})}}};
+ const db={from(table){return{select(){return this},eq(){return this},is(){return this},limit(){return this},then(resolve){return Promise.resolve({data:[],error:null}).then(resolve)},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{pix_enabled:true},error:null}),single:async()=>({data:{id:'admin',role:'admin',full_name:'Ariel'},error:null})}}};
  for(const page of ['home','marketplace','atendimento','definicoes','automacoes','moderacao','rendimento','tools','permissoes','pagamentos','cargos','canais','notificacoes','ia','divulgacao','personalizacao','oauth']){
   const result=await botConfigPanel(db,{guild_id:'guild'},'user',page);assert(result.components.length<=5);assert(result.embeds[0].description.length<=4096);assert.deepEqual(result.allowed_mentions.parse,[]);
   for(const r of result.components){assert(r.components.length<=5);for(const c of r.components){assert((c.custom_id||'').length<=100);if(c.label)assert(c.label.length<=80);}}

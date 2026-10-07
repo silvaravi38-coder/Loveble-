@@ -23,7 +23,8 @@ export async function ticketAi(db:SupabaseClient,user:string,guild:string,ticket
   let context=null;
   if(ticket.order_id){const order=checked(await db.from('orders').select('id,user_id,status,created_at').eq('id',ticket.order_id).eq('user_id',ticket.user_id).maybeSingle());const items=order?checked(await db.from('order_items').select('product_name,quantity').eq('order_id',order.id)):[];context=authorisedOrderContext(order,items,ticket.user_id);}
   if(kind==='reply'&&settings.delay_seconds)await new Promise(resolve=>setTimeout(resolve,settings.delay_seconds*1000));
-  const prompt=JSON.stringify({task:kind==='summary'?'Resuma problema, dados confirmados, ações pendentes e próximos passos para o staff.':'Sugira uma resposta objetiva ao último cliente.',ticket:{subject:ticket.subject,priority:ticket.priority},order:context,conversation:messages.reverse().map(m=>({role:m.sender_role,text:m.message.slice(0,1800)}))});
+  const catalog=checked(await db.from('products').select('name,description,price,delivery_time,requirements').eq('active',true).order('name').limit(25)) as any[];
+  const prompt=JSON.stringify({task:kind==='summary'?'Resuma problema, dados confirmados, ações pendentes e próximos passos para o staff.':'Responda objetivamente à dúvida do último cliente usando o catálogo autorizado. Se faltar informação, encaminhe à equipe.',ticket:{subject:ticket.subject,priority:ticket.priority},order:context,catalog:catalog.map(p=>({...p,description:String(p.description||'').slice(0,1200)})),conversation:messages.reverse().map(m=>({role:m.sender_role,text:m.message.slice(0,1800)}))});
   const sdk=await import('npm:ai@7.0.129');const run=generate||sdk.generateText;
   const result=await run({model:sdk.createGateway({apiKey:key})(settings.model),system:rules+'\nInstruções da loja: '+settings.instructions,prompt,temperature:Number(settings.temperature),maxOutputTokens:settings.max_tokens,maxRetries:0,timeout:20000});
   const text=result.text.trim().slice(0,1800);if(!text)throw new BotError('AI_EMPTY_RESPONSE');
@@ -32,8 +33,8 @@ export async function ticketAi(db:SupabaseClient,user:string,guild:string,ticket
   if(kind==='reply'){
    const mapping=checked(await db.from('discord_tickets').select('channel_id').eq('ticket_id',ticketId).eq('guild_id',guild).single());
    const current=checked(await db.from('support_tickets').select('assigned_to,status').eq('id',ticketId).single());
-   if(mapping.channel_id&&!current.assigned_to&&['open','in_progress'].includes(current.status))await discord(`/channels/${mapping.channel_id}/messages`,'POST',{content:'**Nexium IA**\n'+safeText(text,1800),allowed_mentions:{parse:[]}});
+   if(mapping.channel_id&&!current.assigned_to&&['open','in_progress'].includes(current.status))await discord(`/channels/${mapping.channel_id}/messages`,'POST',{content:'**Nexium IA**\n'+safeText(text,1800),allowed_mentions:{parse:[]},nonce:run_id.replace(/-/g,'').slice(0,24),enforce_nonce:true});
   }
   return privateMessage(`${kind==='summary'?'Resumo para o atendente':kind==='suggest'?'Sugestão da IA — revise antes de enviar':'Resposta da IA'}:\n${text}`);
- }catch(e){const code=e instanceof BotError?e.code:'AI_PROVIDER_ERROR';await db.from('discord_ai_runs').update({status:'failed',error_code:code,finished_at:new Date().toISOString()}).eq('id',run_id);throw new BotError(code);}
+ }catch(e){const status=(e as any)?.statusCode;const code=e instanceof BotError?e.code:status===401?'AI_PROVIDER_UNAUTHORIZED':status===402?'AI_PROVIDER_CREDITS_REQUIRED':status===404?'AI_MODEL_UNAVAILABLE':'AI_PROVIDER_ERROR';await db.from('discord_ai_runs').update({status:'failed',error_code:code,finished_at:new Date().toISOString()}).eq('id',run_id);throw new BotError(code);}
 }

@@ -2,6 +2,7 @@ import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {discord,checked,BotError,audit} from '../discord-interactions/api.ts';
 import {sendNotification} from './notifications.ts';
 import {providerCharge,fulfilPaid} from '../discord-interactions/payments.ts';
+import {pollTicketChats} from './ticket-chat.ts';
 export async function sendScheduled(db:SupabaseClient,record:any,send=discord){
  try{
   const actor=checked(await db.from('profiles').select('role').eq('id',record.requested_by).maybeSingle());if(actor?.role!=='admin')throw new BotError('REQUESTER_NO_LONGER_ADMIN');
@@ -26,5 +27,6 @@ export async function runWorker(db:SupabaseClient){
   const payment=checked(await db.from('payments').select('provider_payment_id').eq('order_id',request.order_id).eq('provider','turbofypay').maybeSingle());if(!payment)continue;
   try{const charge=await providerCharge(payment.provider_payment_id,db,request.order_id);const settled=checked(await db.rpc('discord_settle_payment',{p_payment_id:payment.provider_payment_id,p_charge:charge}));if(settled.paid)await fulfilPaid(db,request.order_id);reconciled++;}catch{ /* Keep reservation until provider truth is available. */ }
  }
- return {claimed_notifications:outbox.length,claimed_messages:records.length,reconciled_payments:reconciled};
+ const ticketChats=await pollTicketChats(db);
+ return {claimed_notifications:outbox.length,claimed_messages:records.length,reconciled_payments:reconciled,polled_tickets:ticketChats};
 }
