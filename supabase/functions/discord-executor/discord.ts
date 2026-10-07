@@ -32,13 +32,17 @@ export async function discordGet(path: string, token: string, onAttempt: (attemp
   throw new ExecutorError('DISCORD_API_ERROR', 502);
 }
 
-export async function discordCreateMessage(channelId:string,body:unknown,token:string,fetcher:typeof fetch=fetch){
+async function discordMessageRequest(channelId:string,messageId:string|undefined,body:unknown,token:string,fetcher:typeof fetch=fetch){
   let response:Response;
-  try{response=await fetcher(`https://discord.com/api/v10/channels/${channelId}/messages`,{method:'POST',headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(8000)});}catch{throw new ExecutorError('MUTATION_RESULT_UNCERTAIN_RESCAN',502);}
+  const path=messageId?`/channels/${channelId}/messages/${messageId}`:`/channels/${channelId}/messages`;
+  try{response=await fetcher(`https://discord.com/api/v10${path}`,{method:messageId?'PATCH':'POST',headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(8000)});}catch{throw new ExecutorError('MUTATION_RESULT_UNCERTAIN_RESCAN',502);}
   if(response.ok)return response.json();
+  if(response.status===404&&messageId)return null;
   if(response.status===401)throw new ExecutorError('DISCORD_TOKEN_INVALID',424);
   if(response.status===403)throw new ExecutorError('DISCORD_PERMISSION_DENIED',424);
   if(response.status===429)throw new ExecutorError('DISCORD_RATE_LIMIT',429);
   if(response.status>=500)throw new ExecutorError('MUTATION_RESULT_UNCERTAIN_RESCAN',502);
   throw new ExecutorError('DISCORD_API_ERROR',502);
 }
+export const discordCreateMessage=(channelId:string,body:unknown,token:string,fetcher:typeof fetch=fetch)=>discordMessageRequest(channelId,undefined,body,token,fetcher);
+export const discordUpdateMessage=(channelId:string,messageId:string,body:unknown,token:string,fetcher:typeof fetch=fetch)=>discordMessageRequest(channelId,messageId,body,token,fetcher);
