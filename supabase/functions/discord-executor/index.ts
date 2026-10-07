@@ -4,6 +4,7 @@ import { planStructure, templateStructure, type Snapshot, type Strategy } from '
 import { connectRuntime } from './runtime.ts';
 import { describeBotAccess } from './permissions.ts';
 import { requireCreatePlan, createPayload, discordCreate } from './apply.ts';
+import { publishPanel } from '../discord-interactions/catalog.ts';
 
 const cors = { 'Access-Control-Allow-Origin': 'https://nexium-store.vercel.app', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
@@ -137,7 +138,24 @@ Deno.serve(async (req: Request) => {
           throw error;
         }
       }
-      result={created,backup_snapshot_id:backupId,reused:preview.result.operations.filter((o:{action:string})=>o.action==='reuse').length,destructive_operations:0,panel_publication_pending:true};
+      // Publish/sync the two interactive Nexium panels after channel IDs are resolved.
+      // Existing panels are reused, so applying the organizer again does not spam duplicate messages.
+      const publishedPanels:any[]=[];
+      const panelTargets=[{key:'channel:produtos',kind:'sales',name:'🛒 Loja Nexium'},{key:'channel:abrirticket',kind:'tickets',name:'🎫 Central de Atendimento'}];
+      const products=checked(await db.from('products').select('id').eq('active',true).order('name').limit(25)).data as any[];
+      for(const target of panelTargets){
+        const channelId=ids.get(target.key); if(!channelId) continue;
+        if(target.kind==='sales'&&!products.length) continue;
+        let panel=checked(await db.from('discord_sales_panels').select('*').eq('guild_id',config.guild_id).eq('channel_id',channelId).eq('panel_kind',target.kind).eq('active',true).maybeSingle()).data;
+        if(!panel){
+          panel=checked(await db.from('discord_sales_panels').insert({name:target.name,slug:`organizer-${target.kind}-${channelId}`,guild_id:config.guild_id,channel_id:channelId,product_ids:target.kind==='sales'?products.map(p=>p.id):[],panel_kind:target.kind,active:true,created_by:actorId,sync_status:'pending'}).select('*').single()).data;
+        }else if(target.kind==='sales'){
+          panel=checked(await db.from('discord_sales_panels').update({product_ids:products.map(p=>p.id),sync_status:'pending'}).eq('id',panel.id).select('*').single()).data;
+        }
+        await publishPanel(db,config.guild_id,channelId,actorId!,panel.id);
+        publishedPanels.push({kind:target.kind,channel_id:channelId,panel_id:panel.id});
+      }
+      result={created,backup_snapshot_id:backupId,reused:preview.result.operations.filter((o:{action:string})=>o.action==='reuse').length,destructive_operations:0,published_panels:publishedPanels,panel_publication_pending:false};
     } else {
       const { data: snapshot } = checked(await db.from('discord_structure_snapshots').select('*').eq('guild_id', config.guild_id).order('created_at', { ascending: false }).limit(1).maybeSingle());
       if (!snapshot || Date.now() - Date.parse(snapshot.created_at) > 600000) throw new ExecutorError('FRESH_SCAN_REQUIRED', 409);
