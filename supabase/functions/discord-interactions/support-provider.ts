@@ -1,8 +1,18 @@
 import {BotError} from './api.ts';
 const normal=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+export function customerReply(text:string){
+ // Defensive cleanup for old response templates echoed by a model.
+ const sent=/^[ \t]*(?:#{1,3}\s*)?(?:\*\*)?Resposta enviada(?:\*\*)?\s*:(?:\*\*)?[ \t]*/gim;
+ const labels=[...text.matchAll(sent)];
+ if(labels.length){const last=labels.at(-1)!;text=text.slice(last.index!+last[0].length);}
+ text=text.replace(/^\s*(?:\*\*)?Resposta sugerida(?:\*\*)?\s*:(?:\*\*)?\s*/i,'');
+ text=text.split(/\n[ \t]*(?:#{1,3}\s*)?(?:\*\*)?(?:Encaminhamento|Nota interna|Instruções para (?:a equipe|o atendente))(?:\*\*)?\s*:/i)[0];
+ return text.replace(/\n\s*---\s*$/,'').trim();
+}
 export function basicSupportReply(messages:any[],catalog:any[],kind:string){
  if(kind==='summary')return 'Resumo automático básico: a equipe precisa revisar as mensagens deste ticket. Nenhum pagamento ou entrega foi confirmado por este atendimento automático.';
  const question=normal(String([...messages].reverse().find(m=>m.sender_role==='customer')?.message||''));
+ if(/comprar.*site|site.*comprar|link.*loja/.test(question))return 'Você pode comprar em https://nexium-store.vercel.app. Escolha o produto e siga as etapas do checkout.';
  if(/pagamento|paguei|pix|comprovante|reembolso|pedido/.test(question))return 'Para consultar pagamento, entrega ou reembolso, informe o número do pedido e aguarde a equipe. Comprovantes enviados no chat não confirmam pagamento.';
  if(/entrega|receber|prazo/.test(question))return 'A entrega manual é feita pela equipe após a confirmação do pagamento. Informe o número do pedido para o atendente consultar o prazo e o andamento.';
  const products=catalog.filter(p=>{const name=normal(String(p.name)).replace(/[^a-z0-9]+/g,' ').trim();return name.length>=3&&question.includes(name);});

@@ -7,7 +7,14 @@ import {route,eventAction,commandParts} from '../supabase/functions/discord-inte
 import {restockUnits,restockModal} from '../supabase/functions/discord-interactions/restock.ts';
 import {lockOverwrites,canonicalOverwrites} from '../supabase/functions/discord-interactions/moderation.ts';
 import {authorisedOrderContext,aiErrorCode} from '../supabase/functions/discord-interactions/ai.ts';
-import {basicSupportReply,groqReply} from '../supabase/functions/discord-interactions/support-provider.ts';
+import {basicSupportReply,groqReply,customerReply} from '../supabase/functions/discord-interactions/support-provider.ts';
+test('customer reply removes staff-only templates without changing normal price or links',()=>{
+ const direct='A Netflix custa R$ 13,90. Compre em https://nexium-store.vercel.app.';
+ assert.equal(customerReply(direct),direct);
+ assert.equal(customerReply('**Resposta sugerida:**\nRascunho\n---\n**Resposta enviada:**\n'+direct+'\n---\nEncaminhamento: Solicite o pedido.'),direct);
+ assert.equal(customerReply('Resposta enviada:\nOi!\n\nNota interna: Peça uma revisão.'),'Oi!');
+ assert.match(basicSupportReply([{sender_role:'customer',message:'Queria comprar pelo site'}],[],'reply'),/https:\/\/nexium-store.vercel.app/);
+});
 test('basic support uses latest customer question and never treats a receipt as paid',()=>{
  const catalog=[{name:'Netflix',description:'Plano disponível conforme opção escolhida.',delivery_time:'Até 10 horas'}];
  const conversation=[{sender_role:'customer',message:'Como funciona a Netflix?'},{sender_role:'ai',message:'Outra resposta'}];
