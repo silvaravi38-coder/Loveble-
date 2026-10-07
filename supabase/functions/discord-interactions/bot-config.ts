@@ -50,8 +50,8 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
   components=[row([{type:3,custom_id:prefix+'select:automation',placeholder:'Escolha uma automação para configurar',min_values:1,max_values:1,options:[{label:'Mensagens Automáticas',value:'divulgacao',description:'Anúncios e mensagens programadas'},{label:'Notificações de compra',value:'notificacoes',description:'Avisos de pagamento e entrega confirmados'},{label:'Gerenciar Canais (Lock/Unlock)',value:'moderacao',description:'Preview e restauração de permissões'},{label:'Atendimento por IA',value:'ia',description:'Ligar, desligar e consultar configuração'}]}]),back()];
  }else if(page==='ia'){
   title='Atendimento por IA';const ai=checked(await db.from('discord_ai_settings').select('enabled,mode,model').eq('guild_id',input.guild_id).maybeSingle());
-  description=`**IA:** ${ai?.enabled?'Ligada':'Desligada'}\n**Modo:** ${ai?.mode==='automatic'?'Responder no ticket':'Sugestões para a equipe'}\n**Modelo:** ${safeText(ai?.model||'Padrão',100)}\n\n**Ajustar IA:** /nexium-admin ia\nPara ligar a IA, a chave do provedor precisa estar configurada no Supabase.`;
-  components=[row([call(ai?.enabled?'Desligar IA':'Ligar IA','ia',ai?.enabled?'off':'on')]),back()];
+  description=`**IA:** ${ai?.enabled?'Ligada':'Desligada'}\n**Modo:** ${ai?.mode==='automatic'?'Responder no ticket':'Sugestões para a equipe'}\n**Modelo:** ${safeText(ai?.model||'Padrão',100)}\n\n**Usar sugestões:** /ticket ia (staff).\n**Resposta no ticket:** cliente envia /ticket mensagem texto:pergunta.\nMensagens comuns digitadas no canal não acionam esta integração. Assumir o ticket pausa as respostas automáticas.`;
+  components=[row([call(ai?.enabled?'Desligar IA':'Ligar IA','ia',ai?.enabled?'off':'on')]),row([call('Somente sugestões','ia','suggest'),call('Responder a /ticket mensagem','ia','automatic')]),back()];
  }else if(page==='divulgacao'){
   title='Divulgação e Mensagens Automáticas';description='**Publicar agora:** /anunciar texto:mensagem\n**Agendar:** /nexium-admin agendar texto:mensagem quando:data\nUse data e horário com fuso, por exemplo 2026-10-08T12:00:00-03:00.\n**Cancelar:** /nexium-admin cancelar-mensagem mensagem:ID\nMenções automáticas ficam desativadas.';
   components=[row([call('Ver mensagens programadas','mensagens')]),back()];
@@ -90,8 +90,8 @@ export async function botConfigAction(db:SupabaseClient,input:any,user:string,ex
  }
  if(action==='run'){
   if(!['estoque','paineis','painel-estoque','suportes','mensagens','lock','unlock','financeiro','ranking-produtos','scan','backup','preview','ia','diagnostico'].includes(value))throw new BotError('UNSUPPORTED_ACTION');
-  if(argument&&!((value==='financeiro'&&['today','month','total','7days','30days'].includes(argument))||(value==='ia'&&['on','off'].includes(argument))))throw new BotError('UNSUPPORTED_ACTION');
-  const result=await execute(value,value==='financeiro'?{periodo:argument||'total'}:value==='ia'?{ligada:argument==='on'}:{});
+  if(argument&&!((value==='financeiro'&&['today','month','total','7days','30days'].includes(argument))||(value==='ia'&&['on','off','suggest','automatic'].includes(argument))))throw new BotError('UNSUPPORTED_ACTION');
+  const result=await execute(value,value==='financeiro'?{periodo:argument||'total'}:value==='ia'?['suggest','automatic'].includes(argument)?{modo:argument}:{ligada:argument==='on'}:{});
   if(value==='ia')return botConfigPanel(db,input,user,'ia','Configuração da IA salva.');
   return {...result,components:[...(result.components||[]),back()]};
  }

@@ -65,7 +65,7 @@ export const nexiumCommands=[...groupedCommands,
  shortcut('payment','Comprar um produto com Pix',existingOptions('nexium','comprar')),
  shortcut('payments','Consultar o Pix de seu pedido',existingOptions('nexium','pagamento')),
  shortcut('gerenciar_stock','Consultar ou repor estoque real',[
-  {...string('acao','Ação desejada'),choices:[{name:'Consultar',value:'consultar'},{name:'Repor unidades',value:'repor'}]},string('produto','Nome, slug ou ID; obrigatório para repor')]),
+  {...string('acao','Ação desejada'),choices:[{name:'Consultar',value:'consultar'},{name:'Repor unidades',value:'repor'},{name:'Quantidade / entrega manual',value:'manual'}]},string('produto','Nome, slug ou ID; obrigatório para repor')]),
  shortcut('gerenciar_produto','Consultar produto e acessar a gestão da loja',[string('produto','Nome, slug ou ID',true)]),
  shortcut('gerenciar_item','Consultar item e suas opções',[string('produto','Nome, slug ou ID',true)]),
  shortcut('anunciar','Publicar anúncio neste canal ou em um canal escolhido',[

@@ -22,7 +22,7 @@ export const row=(components:unknown[])=>({type:1,components});
 export const button=(label:string,id:string,style=1)=>({type:2,style,label,custom_id:id});
 export const linkButton=(label:string,url:string)=>({type:2,style:5,label,url});
 export async function productFor(db:SupabaseClient,term:string) {
- const products=checked(await db.from('products').select('id,name,slug,description,price,image_url,automatic_delivery,delivery_time,requirements').eq('active',true).order('name')) as any[];
+ const products=checked(await db.from('products').select('id,name,slug,description,price,image_url,automatic_delivery,delivery_time,requirements,manual_display_quantity').eq('active',true).order('name')) as any[];
  const exact=products.filter(p=>p.id===term || p.slug.toLowerCase()===term.toLowerCase() || p.name.trim().toLowerCase()===term.trim().toLowerCase());
  const candidates=exact.length?exact:products.filter(p=>p.name.toLowerCase().includes(term.toLowerCase()));
  if(candidates.length!==1)throw new BotError(candidates.length?'AMBIGUOUS_PRODUCT':'PRODUCT_UNAVAILABLE');return candidates[0];

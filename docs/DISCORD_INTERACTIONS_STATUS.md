@@ -119,3 +119,13 @@ Validation: 76 Node tests, strict backend TypeScript check, production database 
 ## Missing ticket channel recovery — 2026-10-07
 
 Before opening/reusing a ticket, the backend checks the linked owner's active channels. Confirmed Discord 404s close orphan records without marking them resolved or paying support; only confirmed failed creation without a channel is similarly released. Forbidden, timeout and uncertain creation results never release a slot. Existing owned channels have the owner's View/Send/History/file/embed overwrite restored when needed, after verifying guild, channel type and Nexium topic; unrelated flags remain intact. The recovery RPC is backend-only, owner-scoped, idempotent and compares the expected channel before changing state. Three deleted channels for the reporting owner's account were confirmed absent in the live guild scan and reconciled; stored history was retained.
+
+## Informational quantity for manual fulfilment — 2026-10-07
+
+`/gerenciar_stock acao:manual produto:...` opens a private numeric form (0–999999; `remover` hides the quantity). Saving explicitly selects manual delivery and updates existing Discord panels, labelling the number as quantity informed by the store. It does not insert supplier keys or decrement the displayed number. Manual products with this quantity can sell their active variants without real key/variant inventory. Checkout records whether it reserved variant inventory, so an expired manual order cannot inflate actual variant stock. A paid manual order remains paid awaiting staff delivery. Automatic products still use their actual inventory. `/nexium-admin restock` also uses the numeric form for an already manual product.
+
+## Ticket AI modes — 2026-10-07
+
+The private AI configuration panel now exposes explicit suggestion and `/ticket mensagem` response mode buttons. Ordinary channel messages do not trigger this HTTP interactions integration. Automatic mode processes the customer's `/ticket mensagem` while the ticket is unclaimed; claiming pauses automatic replies. Staff can request suggestions with `/ticket ia`. The production provider key is present and AI is enabled in suggestion mode; no support AI runs were recorded at inspection.
+
+Validation: 83 Node tests, strict backend TypeScript, manual-quantity SQL fixtures and existing commerce/store-tools rollback suites pass.

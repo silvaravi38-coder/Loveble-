@@ -325,3 +325,20 @@ test('ticket access repair grants only its owner, preserves unrelated permission
  assert.throws(()=>ownerTicketOverwrite({...channel,guild_id:'other'},'owner','guild','ticket'));assert.throws(()=>ownerTicketOverwrite({...channel,topic:'other'},'owner','guild','ticket'));
  const writes=[];await checkTicketChannel({},'owner','guild',{ticket_id:'ticket',channel_id:'channel'},async(path,method='GET',body)=>{if(method==='GET')return channel;writes.push({path,body});});assert.equal(writes[0].path,'/channels/channel/permissions/owner');
 });
+
+
+test('manual quantity accepts bounded integers/removal and only administrators can save',async()=>{
+ const {manualQuantity,manualQuantityModal,saveManualQuantity}=await import('../supabase/functions/discord-interactions/manual-stock.ts');
+ assert.equal(manualQuantity('17'),17);assert.equal(manualQuantity('0'),0);assert.equal(manualQuantity('remover'),null);
+ for(const value of ['-1','1.5','1000000','Infinity','17 keys',null])assert.throws(()=>manualQuantity(value),e=>e.code==='INVALID_MANUAL_QUANTITY');
+ const modal=manualQuantityModal({id:'product',manual_display_quantity:17});assert.equal(modal.data.components[0].components[0].value,'17');assert(!JSON.stringify(modal).includes('units'));
+ await assert.rejects(()=>saveManualQuantity(actorDb('customer'),{data:{custom_id:'nexium:manual-stock:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'}},'user'),e=>e.code==='FORBIDDEN');
+ const parts=commandParts({data:{name:'gerenciar_stock',options:[{name:'acao',value:'manual'},{name:'produto',value:'Netflix'}]}});assert.equal(parts.sub,'restock');assert.equal(parts.options.acao,'manual');
+});
+
+
+test('AI mode buttons explicitly configure existing suggestion and ticket-message handlers',async()=>{
+ const {botConfigAction}=await import('../supabase/functions/discord-interactions/bot-config.ts');const calls=[];const execute=async(sub,o)=>{calls.push({sub,o});return {content:'saved'};};
+ await botConfigAction(actorDb('admin'),{guild_id:'guild',data:{custom_id:'nexium:botconfig:run:ia:automatic'}},'user',execute);
+ assert.deepEqual(calls,[{sub:'ia',o:{modo:'automatic'}}]);
+});

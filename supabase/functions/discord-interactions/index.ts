@@ -1,3 +1,4 @@
+import {saveManualQuantity} from './manual-stock.ts';
 import {paymentConfigModal,savePaymentConfig} from './payment-config.ts';
 import {createProductModal,submitCreatedProduct} from './store-tools.ts';
 import {productRequestModal,submitProductRequest} from './product-requests.ts';
@@ -32,7 +33,7 @@ Deno.serve(async(req:Request)=>{
   EdgeRuntime.waitUntil((async()=>{
     let message=privateMessage('Não foi possível consultar agora. Tente novamente.');let code='INTERNAL_ERROR';
     try{
-      message=input.type===5&&input.data?.custom_id==='nexium:payment-config:save'?await savePaymentConfig(db,input,userId):input.type===5&&input.data?.custom_id==='nexium:store:create-submit'?await submitCreatedProduct(db,input,userId):input.type===5&&String(input.data?.custom_id).startsWith('nexium:stock-request-submit:')?await submitProductRequest(db,input,userId):input.type===5&&String(input.data?.custom_id).startsWith('nexium:restock:')?await saveRestock(db,input,userId):input.type===5?await submitTicketModal(db,input,userId):await route(db,input,userId);code='ACTION_OK';
+      message=input.type===5&&String(input.data?.custom_id).startsWith('nexium:manual-stock:')?await saveManualQuantity(db,input,userId):input.type===5&&input.data?.custom_id==='nexium:payment-config:save'?await savePaymentConfig(db,input,userId):input.type===5&&input.data?.custom_id==='nexium:store:create-submit'?await submitCreatedProduct(db,input,userId):input.type===5&&String(input.data?.custom_id).startsWith('nexium:stock-request-submit:')?await submitProductRequest(db,input,userId):input.type===5&&String(input.data?.custom_id).startsWith('nexium:restock:')?await saveRestock(db,input,userId):input.type===5?await submitTicketModal(db,input,userId):await route(db,input,userId);code='ACTION_OK';
     }catch(error){code=error instanceof BotError?error.code:'INTERNAL_ERROR';message=privateMessage(errorMessages[code]||'Não foi possível concluir esta ação agora. Consulte o suporte.');}
     // Interaction token is kept only in this request's memory, never in audit records.
     let delivered=false;
