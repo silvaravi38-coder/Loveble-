@@ -1,3 +1,5 @@
+import {financeMessage} from './finance-ui.ts';
+import {storeDiagnostics} from './diagnostics.ts';
 import {botConfigPanel,botConfigAction} from './bot-config.ts';
 import {ticketSubjects} from './ticket-ui.ts';
 import {ticketActionButton} from './ticket-actions.ts';
@@ -31,6 +33,7 @@ async function ownedPanel(db:SupabaseClient,input:any,panelId:string,productId:s
 async function orders(db:SupabaseClient,userId:string) {const actor=await actorFor(db,userId);return orderMessage(checked(await db.from('orders').select('id,status,created_at').eq('user_id',actor.id).order('created_at',{ascending:false}).limit(5)));}
 async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Record<string,any>) {
  const actor=await actorFor(db,userId);if(actor.role!=='admin')throw new BotError('FORBIDDEN');
+ if(sub==='diagnostico')return storeDiagnostics(db,input.guild_id);
  if(sub==='dashboard')return adminDashboard();
  if(sub==='anunciar')return announce(db,input,actor.id,o);
  if(sub==='painel-estoque')return refreshStockRequestPanel(db,input,actor.id);
@@ -85,8 +88,7 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
   await audit(db,input.guild_id,actor.id,'coupon_created',c.id,{code,discount:o.desconto,max_uses:o.limite});return privateMessage(`Cupom ${code} criado: ${o.desconto}% • limite ${o.limite} usos.`);
  }
  if(sub==='financeiro'){
-  const report=checked(await db.rpc('discord_finance_report',{p_actor_id:actor.id,p_period:o.periodo||'total'}));const format=(n:number)=>Number(n).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-  return privateMessage(`Receita (${report.period}): ${format(report.revenue)} • ${report.orders} pedidos\nTicket médio: ${format(report.average)}\nSite: ${report.site_orders} • Discord: ${report.discord_orders}\nCustos registrados: ${format(report.recorded_costs)} • taxas: ${format(report.recorded_fees)}\nLucro dos pedidos conciliados: ${format(report.net_reconciled)}\nPedidos sem custos/taxas conciliados: ${report.unreconciled_orders}\nMais vendidos:\n`+report.top_products.map((p:any)=>`• ${safeText(p.product_name,90)}: ${p.quantity}`).join('\n'));
+  const report=checked(await db.rpc('discord_finance_report',{p_actor_id:actor.id,p_period:o.periodo||'total'}));return financeMessage(report);
  }
  if(sub==='suportes'){
   const start=fortalezaMonthStart();

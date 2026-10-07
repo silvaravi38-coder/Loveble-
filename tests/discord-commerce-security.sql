@@ -1,6 +1,6 @@
 begin;
 do $$
-declare customer uuid; staff uuid; admin uuid; product uuid; stock uuid; result jsonb; duplicate jsonb; v_order_id uuid; ticket uuid; pay_id text:=gen_random_uuid()::text; caught boolean; report jsonb; revenue_before numeric; expired_product uuid; expired_order uuid; fresh_order uuid; expired_stock uuid; ai_run uuid;
+declare customer uuid; staff uuid; admin uuid; product uuid; stock uuid; result jsonb; duplicate jsonb; v_order_id uuid; ticket uuid; pay_id text:=gen_random_uuid()::text; caught boolean; report jsonb; revenue_before numeric; expired_product uuid; expired_order uuid; fresh_order uuid; expired_stock uuid; ai_run uuid; before7 numeric; before30 numeric; boundary7 timestamptz; boundary30 timestamptz;
 begin
  select id into admin from profiles where role='admin' limit 1;
  select id into customer from profiles where id<>admin order by created_at limit 1;
@@ -9,6 +9,8 @@ begin
  update profiles set role='support' where id=staff;
  insert into discord_account_links(profile_id,discord_user_id,discord_username) values(customer,'999999999999999991','test-customer'),(staff,'999999999999999992','test-staff');
  report:=discord_finance_report(admin,'total');revenue_before:=(report->>'revenue')::numeric;
+ report:=discord_finance_report(admin,'7days');before7:=(report->>'revenue')::numeric;boundary7:=(report->>'range_start')::timestamptz;
+ report:=discord_finance_report(admin,'30days');before30:=(report->>'revenue')::numeric;boundary30:=(report->>'range_start')::timestamptz;
  insert into products(name,slug,price,active,automatic_delivery) values('SQL fixture','fixture-'||gen_random_uuid(),10,true,true) returning id into product;
  caught:=false;
  begin perform discord_prepare_checkout('test-out-of-stock','999999999999999991','999999999999999990','999999999999999993',product); exception when others then if sqlerrm='OUT_OF_STOCK' then caught:=true;else raise;end if;end;
@@ -34,6 +36,13 @@ begin
  insert into discord_order_finance(order_id,cost,fee,note,updated_by) values(v_order_id,2,1,'SQL fixture',admin);
  report:=discord_finance_report(admin,'total');if (report->>'revenue')::numeric<>revenue_before+10 then raise exception 'finance omitted paid order';end if;
  caught:=false;begin perform discord_finance_report(customer,'total');exception when others then if sqlerrm='FORBIDDEN' then caught:=true;else raise;end if;end;if not caught then raise exception 'customer finance access';end if;
+ report:=discord_finance_report(admin,'7days');if (report->>'revenue')::numeric<>before7+10 then raise exception '7-day report omitted paid fixture';end if;
+ update orders set created_at=boundary7-interval '1 second' where id=v_order_id;
+ report:=discord_finance_report(admin,'7days');if (report->>'revenue')::numeric<>before7 then raise exception '7-day boundary leaked fixture';end if;
+ report:=discord_finance_report(admin,'30days');if (report->>'revenue')::numeric<>before30+10 then raise exception '30-day report omitted fixture';end if;
+ update orders set created_at=boundary30-interval '1 second' where id=v_order_id;
+ report:=discord_finance_report(admin,'30days');if (report->>'revenue')::numeric<>before30 then raise exception '30-day boundary leaked fixture';end if;
+ update orders set created_at=now() where id=v_order_id;
  result:=discord_ticket_action('999999999999999991','999999999999999990','open',null,jsonb_build_object('reason','SQL test question','interaction_id','test-ticket','order_id',v_order_id));
  ticket:=(result->>'ticket_id')::uuid;
  caught:=false;

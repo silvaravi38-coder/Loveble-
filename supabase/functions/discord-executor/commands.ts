@@ -30,7 +30,7 @@ const groupedCommands=[
   sub('lock','Preview e confirmação para bloquear este canal'),sub('unlock','Preview e confirmação para restaurar este canal'),
   sub('restock','Adicionar unidades reais em formulário privado',[string('produto','Nome, slug ou ID do produto',true)]),
   sub('estoque','Consultar quantidades; não mostra chaves',[string('produto','Nome, slug ou ID')]),
-  sub('financeiro','Receita e ticket médio',[{...string('periodo','Período'),choices:[{name:'Hoje',value:'today'},{name:'Mês',value:'month'},{name:'Total',value:'total'}]}]),
+  sub('financeiro','Receita e ticket médio',[{...string('periodo','Período'),choices:[{name:'Hoje',value:'today'},{name:'Mês',value:'month'},{name:'Total',value:'total'},{name:'Últimos 7 dias',value:'7days'},{name:'Últimos 30 dias',value:'30days'}]}]),
   sub('suportes','Tickets assumidos/resolvidos e remuneração do mês'),
   sub('configurar','Configurar IDs usados pelo bot',[{type:5,name:'pix',description:'Ativar/desativar PIX Discord'},{type:5,name:'cargo_cliente_apos_pago',description:'Conceder cargo Cliente após pagamento'},{type:5,name:'dm_pagamento',description:'Notificar cliente por DM após pagamento'},{type:5,name:'dm_entrega',description:'Notificar cliente por DM após entrega'},{type:7,name:'logs',description:'Canal de logs'},{type:8,name:'cliente',description:'Cargo Cliente'},{type:8,name:'suporte',description:'Cargo Suporte'},{type:7,name:'categoria_tickets',description:'Categoria para tickets',channel_types:[4]}]),
   sub('cupom','Criar cupom',[string('codigo','Código',true),{type:10,name:'desconto',description:'Percentual de desconto',required:true,min_value:1,max_value:99},{type:4,name:'limite',description:'Máximo de usos',required:true,min_value:1,max_value:10000}])]},

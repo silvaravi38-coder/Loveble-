@@ -195,7 +195,7 @@ test('botconfig without arguments opens the dashboard without writing settings',
 test('every botconfig page fits Discord limits and private responses suppress mentions',async()=>{
  const {botConfigPanel}=await import('../supabase/functions/discord-interactions/bot-config.ts');
  const db={from(table){return{select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{pix_enabled:true},error:null}),single:async()=>({data:{id:'admin',role:'admin',full_name:'Ariel'},error:null})}}};
- for(const page of ['home','marketplace','atendimento','definicoes','automacoes','moderacao','rendimento','tools','permissoes']){
+ for(const page of ['home','marketplace','atendimento','definicoes','automacoes','moderacao','rendimento','tools','permissoes','pagamentos','cargos','canais','notificacoes','ia','divulgacao','personalizacao','oauth']){
   const result=await botConfigPanel(db,{guild_id:'guild'},'user',page);assert(result.components.length<=5);assert(result.embeds[0].description.length<=4096);assert.deepEqual(result.allowed_mentions.parse,[]);
   for(const r of result.components){assert(r.components.length<=5);for(const c of r.components){assert((c.custom_id||'').length<=100);if(c.label)assert(c.label.length<=80);}}
  }
@@ -230,4 +230,23 @@ test('explicit role settings stay manual and foreign channels cannot be saved',a
   globalThis.fetch=async()=>new Response(JSON.stringify({guild_id:'other-guild',type:0}));
   await assert.rejects(()=>route(db,{type:2,guild_id:'guild',data:{name:'botconfig',options:[{name:'logs',value:'999999999999999990'}]}},'user'),e=>e.code==='WRONG_PANEL_CHANNEL');assert.equal(writes.length,1);
  }finally{globalThis.fetch=previousFetch;globalThis.Deno=previousDeno;}
+});
+
+
+test('automation dropdown only routes allowed pages and financial buttons keep selected windows',async()=>{
+ const {botConfigAction}=await import('../supabase/functions/discord-interactions/bot-config.ts');
+ const calls=[];const execute=async(sub,options)=>{calls.push({sub,options});return{components:[]}};
+ await botConfigAction(actorDb('admin'),{data:{custom_id:'nexium:botconfig:run:financeiro:7days'}},'user',execute);
+ await botConfigAction(actorDb('admin'),{data:{custom_id:'nexium:botconfig:run:financeiro:30days'}},'user',execute);
+ assert.deepEqual(calls,[{sub:'financeiro',options:{periodo:'7days'}},{sub:'financeiro',options:{periodo:'30days'}}]);
+ await assert.rejects(()=>botConfigAction(actorDb('admin'),{data:{custom_id:'nexium:botconfig:select:automation',values:['aplicar']}},'user',execute),e=>e.code==='UNSUPPORTED_ACTION');
+ await assert.rejects(()=>route(actorDb('customer'),{type:3,data:{custom_id:'nexium:botconfig:run:diagnostico'}},'user'),e=>e.code==='FORBIDDEN');
+});
+
+
+test('finance cards show real revenue and reconciliation separately and retain period controls',async()=>{
+ const {financeMessage}=await import('../supabase/functions/discord-interactions/finance-ui.ts');
+ const result=financeMessage({period:'7days',revenue:100,orders:4,average:25,site_orders:1,discord_orders:3,recorded_costs:10,recorded_fees:2,net_reconciled:30,unreconciled_orders:2,top_products:[]});
+ assert.match(result.embeds[0].title,/7 dias/);assert.match(result.embeds[0].description,/4 pedidos/);assert.match(result.embeds[0].fields[1].value,/Pedidos sem custos\/taxas conciliados: 2/);assert.deepEqual(result.allowed_mentions.parse,[]);
+ assert(result.components.flatMap(r=>r.components).some(c=>c.custom_id.endsWith(':30days')));
 });

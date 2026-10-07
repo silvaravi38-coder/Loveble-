@@ -34,7 +34,7 @@ export async function refreshStockRequestPanel(db:SupabaseClient,input:any,actor
  return privateMessage(`Painel de solicitação de estoque atualizado em <#${mapping.parent_id}>. O formulário mantém o cooldown de 3 minutos.`);
 }
 export async function productRanking(db:SupabaseClient,actor:string,period='total'){
- if(!['today','month','total'].includes(period))throw new BotError('INVALID_FINANCE_DATA');
+ if(!['today','month','total','7days','30days'].includes(period))throw new BotError('INVALID_FINANCE_DATA');
  const report=checked(await db.rpc('discord_finance_report',{p_actor_id:actor,p_period:period}));
  return privateMessage(`Produtos mais vendidos (${period==='today'?'hoje':period==='month'?'mês':'total'})\n`+(report.top_products.length?report.top_products.map((p:any,i:number)=>`${i+1}. ${safeText(p.product_name,90)} — ${p.quantity} unidade(s)`).join('\n'):'Nenhuma venda confirmada neste período.'));
 }
