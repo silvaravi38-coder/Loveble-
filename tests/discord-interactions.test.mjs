@@ -33,3 +33,25 @@ test('streaming routing recognizes existing obfuscated channels and excludes oth
  assert.equal(targets.length,3);assert.equal(targets[0].channel.id,'netflix');assert.equal(targets[1].channel.id,'spotify');assert.equal(targets[2].channel,undefined);
  assert.throws(()=>streamingTargets([{name:'Netflix'}],[{name:'netflix',type:0},{name:'n3tefl1x',type:0}]),/AMBIGUOUS_STREAMING_CHANNEL/);
 });
+import {ticketChannelName,deleteClosedTicketChannel} from '../supabase/functions/discord-interactions/ticket-lifecycle.ts';
+import {BotError} from '../supabase/functions/discord-interactions/api.ts';
+test('ticket channels use chosen subject and stable unique suffix',()=>{
+ assert.equal(ticketChannelName('Pagamento PIX','12345678-1234'),'pagamento-pix-12345678');
+ assert.equal(ticketChannelName('Compra e entrega: pedido','87654321-1234'),'compra-entrega-87654321');
+ assert.equal(ticketChannelName('Ajuda com produto','12345678'),'ajuda-produto-12345678');
+ assert.equal(ticketChannelName('Outros assuntos','12345678'),'outros-assuntos-12345678');
+});
+test('auto deletion requires closed ticket and owned guild/channel/topic; handles confirmed missing channels',async()=>{
+ const view={ticket:{id:'abc',status:'resolved'},discord:{closed_at:'now',channel_id:'123',channel_state:'ready'}};
+ const channel={id:'123',guild_id:'guild',type:0,topic:'Nexium ticket abc'};const calls=[];
+ await deleteClosedTicketChannel(view,'guild',async(path,method='GET')=>{calls.push(method);return channel;});assert.deepEqual(calls,['GET','DELETE']);
+ await assert.rejects(deleteClosedTicketChannel({...view,ticket:{...view.ticket,status:'open'}},'guild'),/TICKET_CLOSE_BEFORE_DELETE/);
+ await assert.rejects(deleteClosedTicketChannel(view,'guild',async()=>({...channel,topic:'unrelated'})),/PROTECTED_TICKET_CHANNEL/);
+ await deleteClosedTicketChannel(view,'guild',async()=>{throw new BotError('DISCORD_RESOURCE_NOT_FOUND');});
+ await assert.rejects(deleteClosedTicketChannel(view,'guild',async()=>{throw new BotError('DISCORD_NETWORK');}),/DISCORD_NETWORK/);
+});
+import {productRequestPanel,requestValues} from '../supabase/functions/discord-interactions/product-requests.ts';
+test('stock request panel includes real form button and three minute interval',()=>{
+ const panel=productRequestPanel();assert.match(panel.embeds[0].description,/3 minutos/);assert.equal(panel.components[0].components[0].custom_id,'nexium:stock-request:v1');
+ assert.deepEqual(requestValues({data:{components:[{component:{custom_id:'name',value:' Teste '}},{components:[{custom_id:'description',value:'Descrição'}]}]}}),{name:'Teste',description:'Descrição'});
+});

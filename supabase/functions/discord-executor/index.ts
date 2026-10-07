@@ -1,3 +1,4 @@
+import {productRequestPanel} from '../discord-interactions/product-requests.ts';
 import {syncStreaming} from './streaming.ts';
 import {syncInformationMessage} from './information.ts';
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.57.4';
@@ -193,7 +194,7 @@ Deno.serve(async (req: Request) => {
       const infoMessages:any[]=[];
       for(const item of infoTargets){
         const channelId=ids.get(item.key); if(!channelId) continue;
-        const payload={content:null,allowed_mentions:{parse:[]},embeds:[{title:item.title,description:item.description,color:0x5865f2,footer:{text:'Nexium Store'}}]};
+        const payload=item.key==='channel:solicitarproduto'?productRequestPanel():{content:null,allowed_mentions:{parse:[]},embeds:[{title:item.title,description:item.description,color:0x5865f2,footer:{text:'Nexium Store'}}]};
         const logicalKey=`panel:${item.key}`;
         const mapped=checked(await db.from('discord_resource_mappings').select('discord_id').eq('guild_id',config.guild_id).eq('resource_type','message').eq('logical_key',logicalKey).maybeSingle()).data;
         const message=await syncInformationMessage(channelId,mapped?.discord_id,payload,logicalKey,bot.id,token);

@@ -1,6 +1,7 @@
+import {ticketChannelName,deleteClosedTicketChannel} from './ticket-lifecycle.ts';
 import {ticketCard,refreshTicketCard} from './ticket-card.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
-import {BotError,checked,discord,actorFor,uuid,snowflake,safeText,row,button} from './api.ts';
+import {BotError,checked,discord,audit,actorFor,uuid,snowflake,safeText,row,button} from './api.ts';
 import {ticketAi} from './ai.ts';
 import {privateMessage} from './security.ts';
 export async function ticketId(db:SupabaseClient,guild:string,channel:string,value?:string) {
@@ -25,7 +26,7 @@ export async function openTicket(db:SupabaseClient,input:any,user:string,reason:
  let createdChannel:string|undefined;
  try{
   if(config?.category_support_id){const category=await discord(`/channels/${config.category_support_id}`);if(category.guild_id!==input.guild_id||category.type!==4)throw new BotError('INVALID_TICKET_CATEGORY');}
-  const channel=await discord(`/guilds/${input.guild_id}/channels`,'POST',{name:`ticket-${created.ticket_id.slice(0,8)}`,type:0,...(config?.category_support_id?{parent_id:config.category_support_id}:{}),permission_overwrites:overwrites,topic:`Nexium ticket ${created.ticket_id}`});
+  const channel=await discord(`/guilds/${input.guild_id}/channels`,'POST',{name:ticketChannelName(reason,created.ticket_id),type:0,...(config?.category_support_id?{parent_id:config.category_support_id}:{}),permission_overwrites:overwrites,topic:`Nexium ticket ${created.ticket_id}`});
   createdChannel=channel.id;
   checked(await db.from('discord_tickets').update({channel_id:channel.id,channel_state:'ready'}).eq('ticket_id',created.ticket_id));
   const ticket=checked(await db.from('support_tickets').select('*').eq('id',created.ticket_id).single());
@@ -61,7 +62,7 @@ export async function actTicket(db:SupabaseClient,input:any,userId:string,action
   if(action==='cancel'&&view.ticket.user_id!==actor.id)throw new BotError('FORBIDDEN');
   if(action==='close'&&(!['admin','support'].includes(actor.role)||(actor.role==='support'&&view.ticket.assigned_to!==actor.id)))throw new BotError('CLAIM_REQUIRED');
   if(!options.reason||options.reason.trim().length<3)throw new BotError('CLOSE_REASON_REQUIRED');
-  if(channelId)await captureTranscript(db,id,channelId,actor.id);
+  if(channelId&&!view.discord.deleted_at){const transcript=await captureTranscript(db,id,channelId,actor.id);if(!transcript.complete)throw new BotError('TRANSCRIPT_PARTIAL_DELETE_BLOCKED');}
  }
  if(['add_member','remove_member','transfer'].includes(action)) {
   const memberId=options.target;if(!snowflake(memberId))throw new BotError('INVALID_ID');
@@ -76,15 +77,15 @@ export async function actTicket(db:SupabaseClient,input:any,userId:string,action
  if((action==='claim'||action==='transfer')&&channelId)await discord(`/channels/${channelId}/permissions/${action==='claim'?userId:options.target}`,'PUT',{type:1,allow:'117760',deny:'0'});
  if(action==='message'&&channelId)await discord(`/channels/${channelId}/messages`,'POST',{content:`${safeText(actor.full_name,100)}: ${safeText(options.text,1800)}`,allowed_mentions:{parse:[]}});
  if(action==='message'&&actor.role!=='admin'&&actor.role!=='support'){try{await ticketAi(db,userId,input.guild_id,id,'reply');}catch{ /* Disabled, paused or provider failure never prevents staff support. */ }}
- if(['claim','transfer','priority','close','cancel'].includes(action)){try{await refreshTicketCard(db,result);}catch{/* Ticket state remains authoritative; do not repeat a completed action for a card failure. */}}
+ if(['claim','transfer','priority'].includes(action)){try{await refreshTicketCard(db,result);}catch{/* Ticket state remains authoritative; do not repeat a completed action for a card failure. */}}
  if(action==='claim'){try{const summary=await ticketAi(db,userId,input.guild_id,id,'summary');return {...summary,content:'Atendimento assumido. IA automática pausada.\n'+summary.content};}catch{ /* Claim succeeds even when AI is unavailable. */ }}
  if(action==='add_member')await discord(`/channels/${channelId}/permissions/${options.target}`,'PUT',{type:1,allow:'117760',deny:'0'});
  if(action==='remove_member')await discord(`/channels/${channelId}/permissions/${options.target}`,'DELETE');
  if((action==='close'||action==='cancel')&&channelId){
-  const owner=checked(await db.from('discord_account_links').select('discord_user_id').eq('profile_id',view.ticket.user_id).single());
-  // Archive in place: preserve channel/messages, disable customer sending.
-  await discord(`/channels/${channelId}/permissions/${owner.discord_user_id}`,'PUT',{type:1,allow:'66560',deny:'2048'});
-  await discord(`/channels/${channelId}/messages`,'POST',{content:action==='cancel'?`🚪 **Atendimento encerrado**\n\nEste ticket foi cancelado. O histórico do atendimento foi preservado.`:`✅ **Atendimento finalizado**\n\nObrigado por utilizar o suporte da **Nexium Store**.\n⭐ Você já pode avaliar o atendimento usando o botão **Avaliar** abaixo.`,allowed_mentions:{parse:[]}});
+  await deleteClosedTicketChannel(result,input.guild_id);
+  checked(await db.from('discord_tickets').update({deleted_at:new Date().toISOString()}).eq('ticket_id',id));
+  await audit(db,input.guild_id,actor.id,'ticket_channel_deleted',id,{channel_id:channelId,automatic:true});
+
  }
  if(action==='transcript'){
   if(channelId&&!view.discord.deleted_at)await captureTranscript(db,id,channelId,actor.id);
@@ -95,7 +96,7 @@ export async function actTicket(db:SupabaseClient,input:any,userId:string,action
  }
  const minutes=Math.max(0,Math.round(((result.discord.closed_at?Date.parse(result.discord.closed_at):Date.now())-Date.parse(result.ticket.created_at))/60000));
  const priority:Record<string,string>={low:'Baixa',normal:'Normal',high:'Alta',urgent:'Urgente'};
- if(action==='close')return privateMessage(`✅ **Atendimento finalizado!**\n\nSeu ticket foi encerrado com sucesso.\n📌 **Status:** ${options.outcome==='resolved'?'Resolvido':'Encerrado'}\n⏱️ **Duração:** ${minutes} min\n⭐ Você já pode avaliar o atendimento pelo botão **Avaliar**.`);
+ if(action==='close')return privateMessage(`✅ **Atendimento finalizado!**\n\nSeu ticket foi encerrado com sucesso.\n📌 **Status:** ${options.outcome==='resolved'?'Resolvido':'Encerrado'}\n⏱️ **Duração:** ${minutes} min\n🗑️ O canal foi apagado. O histórico ficou salvo na Nexium.`);
  if(action==='cancel')return privateMessage('🚪 **Ticket encerrado.**\n\nO atendimento foi cancelado e o histórico foi salvo.');
  if(action==='priority')return privateMessage(`⚡ **Prioridade atualizada:** ${priority[result.ticket.priority]||'Normal'}.`);
  if(action==='transfer')return privateMessage('🔄 **Atendimento transferido com sucesso.**');

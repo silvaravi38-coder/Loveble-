@@ -1,3 +1,5 @@
+import {productRequestPanel} from '../discord-interactions/product-requests.ts';
+import {syncInformationMessage} from './information.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,discord} from '../discord-interactions/api.ts';
 import {publishPanel} from '../discord-interactions/catalog.ts';
@@ -38,5 +40,8 @@ export async function syncStreaming(db:SupabaseClient,guild:string,actor:string)
   await publishPanel(db,guild,channel.id,actor,panel.id);
   indexMessage=checked(await db.from('discord_sales_panels').select('message_id').eq('id',panel.id).single());
  }
- return {panels:results,index:indexMessage};
+ const requestSource=checked(await db.from('discord_resource_mappings').select('*').eq('guild_id',guild).eq('logical_key','panel:channel:solicitarproduto').eq('resource_type','message').single());
+ const requestMessage=await syncInformationMessage(requestSource.parent_id,requestSource.discord_id,productRequestPanel(),'panel:channel:solicitarproduto','1557132199227031552',Deno.env.get('DISCORD_BOT_TOKEN')!);
+ if(requestMessage.id!==requestSource.discord_id)checked(await db.rpc('discord_bind_resource',{p_resource:{...requestSource,discord_id:requestMessage.id}}));
+ return {panels:results,index:indexMessage,request_panel_message:requestMessage.id};
 }
