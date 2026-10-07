@@ -156,9 +156,11 @@ Deno.serve(async (req: Request) => {
         publishedPanels.push({kind:target.kind,channel_id:channelId,panel_id:panel.id});
       }
       const infoTargets=[
+        {key:'channel:regras',title:'📌 | Regras da Nexium Store',description:'Mantenha o respeito, não faça spam e não divulgue conteúdo ou links sem autorização. Use cada canal para sua finalidade e siga as orientações da equipe.'},
         {key:'channel:termos',title:'📜 | Termos da Nexium Store',description:'Leia as regras de compra, entrega e garantia informadas em cada produto antes de concluir o pedido. Para dúvidas sobre uma compra, utilize a Central de Atendimento.'},
         {key:'channel:solicitarproduto',title:'📦 | Solicitar novo produto',description:'Não encontrou o produto que procura? Envie neste canal o nome do produto, plano ou duração desejada. A equipe poderá analisar a solicitação.'},
         {key:'channel:boasvindas',title:'👋 | Bem-vindo à Nexium Store',description:'Seu universo digital em um só lugar. Confira os produtos disponíveis e utilize a Central de Atendimento quando precisar de ajuda.'},
+        {key:'channel:duvidas',title:'💬 | Dúvidas',description:'Use este canal para dúvidas rápidas sobre a loja. Para pedidos, pagamentos, entregas ou problemas que precisem de atendimento privado, abra um ticket na Central de Atendimento.'},
       ];
       const infoMessages:any[]=[];
       for(const item of infoTargets){
