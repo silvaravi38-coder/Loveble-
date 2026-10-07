@@ -10,6 +10,26 @@ export async function ticketActionButton(db:SupabaseClient,input:any,user:string
  if(action==='ticket-delete-confirm')return confirmDelete(db,input,user,id);
  if(!uuid(id))throw new BotError('INVALID_ID');const actor=await actorFor(db,user),view=await ticketRpc(db,user,input.guild_id,'view',id);
  if(view.discord.channel_id!==input.channel_id)throw new BotError('TICKET_NOT_FOUND');
+ if(action==='ticket-panels'){
+  const selected=input.data.values?.[0];if(!['staff','member'].includes(selected))throw new BotError('INVALID_TICKET_FORM');action=selected==='staff'?'ticket-staff':'ticket-member';
+ }
+ if(action==='ticket-member'){
+  if(view.ticket.user_id!==actor.id)throw new BotError('FORBIDDEN');
+  return {...privateMessage('👤 **Painel Membro • Nexium Store**\nConsulte seu histórico, acompanhe pagamentos ou encerre seu atendimento.'),components:[row([button('📄 Meu histórico',`nexium:ticket-transcript:${id}`,2),button('💰 Pagamento',`nexium:ticket-payment:${id}`,3)]),row([button('🚪 Encerrar meu ticket',`nexium:ticket-cancel:${id}`,4)])]};
+ }
+ if(action==='ticket-notify'){
+  if(view.discord.closed_at)throw new BotError('TICKET_ALREADY_CLOSED');
+  const prior=checked(await db.from('discord_audit_events').select('id').eq('guild_id',input.guild_id).eq('actor_id',actor.id).eq('action','ticket_notify').eq('entity_id',id).gt('created_at',new Date(Date.now()-180000).toISOString()).limit(1)) as any[];
+  if(prior.length)throw new BotError('REQUEST_COOLDOWN');
+  const isStaff=['admin','support'].includes(actor.role);
+  const owner=checked(await db.from('discord_account_links').select('discord_user_id').eq('profile_id',view.ticket.user_id).single());
+  const config=checked(await db.from('discord_bot_settings').select('role_support_id').eq('guild_id',input.guild_id).single());
+  const target=isStaff?owner.discord_user_id:config.role_support_id;
+  if(!target)throw new BotError('STAFF_NOT_AUTHORIZED');
+  await audit(db,input.guild_id,actor.id,'ticket_notify',id,{target});
+  await discord(`/channels/${input.channel_id}/messages`,'POST',{content:isStaff?`<@${target}> A equipe aguarda sua resposta neste atendimento.`:`<@&${target}> O cliente está aguardando atendimento neste ticket.`,allowed_mentions:{parse:[],users:isStaff?[target]:[],roles:isStaff?[]:[target]}});
+  return privateMessage('🔔 Notificação enviada. Aguarde 3 minutos antes de notificar novamente.');
+ }
  if(action==='ticket-staff'){
   if(!['admin','support'].includes(actor.role))throw new BotError('FORBIDDEN');
   return {...privateMessage('🔧 **Painel Staff • Nexium Store**\n\nGerencie este atendimento por aqui. Para transferir, alterar prioridade, adicionar/remover membros ou finalizar, o ticket deve estar sob responsabilidade da equipe. Todas as ações ficam registradas no histórico.'),components:[row([{type:3,custom_id:`nexium:ticket-manage:${id}`,placeholder:'🔧 Selecione uma ação da equipe',options:[{label:'Transferir atendimento',value:'transfer',emoji:{name:'🔄'},description:'Passe o ticket para outro atendente'},{label:'Alterar prioridade',value:'priority',emoji:{name:'⚡'},description:'Defina a urgência deste atendimento'},{label:'Adicionar membro',value:'add_member',emoji:{name:'➕'},description:'Libere acesso ao canal para um membro'},{label:'Remover membro',value:'remove_member',emoji:{name:'➖'},description:'Remova o acesso de um membro'},{label:'Finalizar atendimento',value:'close',emoji:{name:'✅'},description:'Encerre registrando motivo e resultado'},{label:'Consultar transcript',value:'transcript',emoji:{name:'📄'},description:'Consulte o histórico do atendimento'}]}])]};

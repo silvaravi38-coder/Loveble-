@@ -17,7 +17,7 @@ export function ticketPanel(panel:any,disabled=false,emojis:any[]=[]){
 
 export function ticketControls(id:string,closed=false){
  if(closed)return [row([button('📄 Transcript',`nexium:ticket-transcript:${id}`,2),button('⭐ Avaliar',`nexium:ticket-rate:${id}`,1),button('🗑️ Deletar',`nexium:ticket-delete:${id}`,4)])];
- return [row([button('🚪 Sair do ticket',`nexium:ticket-cancel:${id}`,2)]),row([button('🙋 Assumir',`nexium:ticket-claim:${id}`),button('🔧 Painel Staff',`nexium:ticket-staff:${id}`,1)]),row([button('💰 Gerar Pagamento',`nexium:ticket-payment:${id}`,3)]),row([button('✅ Finalizar atendimento',`nexium:ticket-close:${id}`,4),button('📄 Transcript',`nexium:ticket-transcript:${id}`,2)]),row([button('🗑️ Deletar',`nexium:ticket-delete:${id}`,4)])];
+ return [row([{type:3,custom_id:`nexium:ticket-panels:${id}`,placeholder:'📋 Selecione um painel de opções',options:[{label:'Painel Staff',value:'staff',description:'Ferramentas exclusivas para a equipe',emoji:{id:'1555363276236529745',name:'55609admingreenCopia'}},{label:'Painel Membro',value:'member',description:'Opções disponíveis para você',emoji:{id:'1555363193621188718',name:'roles1'}}]}]),row([button('🕒 Notificar',`nexium:ticket-notify:${id}`),button('🎟️ Assumir Ticket',`nexium:ticket-claim:${id}`,2)]),row([button('🗑️ Deletar e Salvar',`nexium:ticket-save-delete:${id}`,4)])];
 }
 async function panelFor(db:SupabaseClient,input:any,id:string,message:string){
  if(!uuid(id))throw new BotError('INVALID_ID');
@@ -28,6 +28,7 @@ const textField=(id:string,label:string,required=true,max=450)=>({type:18,label,
 export function modalValues(input:any){const fields:Record<string,any>={};for(const item of input.data?.components||[]){for(const field of item.component?[item.component]:item.components||[]){if(typeof field.custom_id==='string')fields[field.custom_id]=field.value??field.values?.[0];}}return fields;}
 export async function ticketModal(db:SupabaseClient,input:any,user:string){
  if(input.type!==3)return null;const [,original,id]=String(input.data?.custom_id||'').split(':');let action=original;
+ if(original==='ticket-save-delete'){const actor=await actorFor(db,user);action=['admin','support'].includes(actor.role)?'ticket-close':'ticket-cancel';}
  if(original==='ticket-manage'){const selected=input.data.values?.[0];if(!['transfer','priority','add_member','remove_member','close','transcript'].includes(selected))throw new BotError('INVALID_TICKET_FORM');action=selected==='close'?'ticket-close':`ticket-${selected}`;}
  if(['ticket-transfer','ticket-priority','ticket-add_member','ticket-remove_member','ticket-rate'].includes(action)){
   if(!uuid(id))throw new BotError('INVALID_ID');const actor=await actorFor(db,user),view=await ticketRpc(db,user,input.guild_id,'view',id);if(view.discord.channel_id!==input.channel_id)throw new BotError('TICKET_NOT_FOUND');

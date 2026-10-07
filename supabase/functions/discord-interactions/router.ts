@@ -88,7 +88,7 @@ export async function route(db:SupabaseClient,input:any,userId:string) {
   const parts=String(input.data.custom_id).split(':');
   if(input.data.custom_id==='nexium:my-orders:v1')return orders(db,userId);
   if(input.data.custom_id==='nexium:catalog:v1')return productDetails(db,input.data.values?.[0]||'');
-  if(['ticket-staff','ticket-payment','ticket-delete','ticket-delete-confirm','ticket-manage'].includes(parts[1]))return ticketActionButton(db,input,userId,parts[1],parts[2]);
+  if(['ticket-panels','ticket-member','ticket-notify','ticket-staff','ticket-payment','ticket-delete','ticket-delete-confirm','ticket-manage'].includes(parts[1]))return ticketActionButton(db,input,userId,parts[1],parts[2]);
   if(parts[1]==='ticket-open'){
    if(!uuid(parts[2]))throw new BotError('INVALID_ID');const panel=checked(await db.from('discord_sales_panels').select('*').eq('id',parts[2]).eq('guild_id',input.guild_id).eq('channel_id',input.channel_id).eq('active',true).eq('panel_kind','tickets').maybeSingle());
    if(!panel||panel.message_id!==input.message?.id)throw new BotError('PANEL_PRODUCT_MISMATCH');const subject=ticketSubjects.find(s=>s.value===(parts[3]||input.data.values?.[0]));if(!subject)throw new BotError('INVALID_TICKET_FORM');return openTicket(db,input,userId,subject.label);

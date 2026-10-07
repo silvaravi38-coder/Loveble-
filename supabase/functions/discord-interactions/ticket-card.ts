@@ -14,15 +14,17 @@ export function ticketCard(id:string,ticket:any,owner:any,assigned:any,staffRole
   content:null,
   allowed_mentions:{parse:[]},
   embeds:[{
-   title:closed?'🔒 | Atendimento encerrado':'🎫 | Atendimento: Suporte',
+   image:{url:'https://flcqndjlzuhmxxahjudj.supabase.co/storage/v1/object/public/product-images/discord/nexium-atendimento.png'},
+   author:{name:safeText(owner.username||owner.name||'Cliente',100),...(avatar?{icon_url:avatar}:{})},
+   title:closed?'🔒 | Atendimento encerrado':safeText(ticket.subject?.split(':')[0]||'Suporte',100),
    description:closed
     ?`O atendimento de ${ownerLabel} foi encerrado. O histórico continua registrado na Nexium Store.`
-    :`Olá ${ownerLabel}! 👋\n\nSeja bem-vindo ao atendimento da **Nexium Store**. Explique com detalhes o que você precisa e nossa equipe responderá por este canal.`,
-   color:closed?0x747f8d:0x5865f2,
+    :`✌️ Olá, ${ownerLabel}. Em que podemos ajudar?\n<:info:1555363211207905280> Por favor, aguarde enquanto um membro da nossa equipe venha lhe atender.\n\nExplique o que precisa neste canal.`,
+   color:closed?0x747f8d:0xe3e5e8,
    ...(avatar?{thumbnail:{url:avatar}}:{}),
    fields:[
     {name:'ℹ️ | Informações',value:[
-      `🔧 **Função:** Suporte`,
+      `🔧 **Setor:** ${safeText(ticket.subject?.split(':')[0]||'Suporte',100)}`,
       `📅 **Data:** <t:${opened}:F>`,
       `👤 **Cliente:** ${ownerLabel}`,
       `👥 **Assumido:** ${assignedLabel}`,

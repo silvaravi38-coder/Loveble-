@@ -65,7 +65,7 @@ test('ticket panel selects original Nexium subjects and unpublish removes all co
  const {ticketPanel,ticketControls}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');
  const panel={id:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',name:'Atendimento Nexium'};
  const payload=ticketPanel(panel);assert.equal(payload.components[0].components[0].type,3);assert.deepEqual(payload.components[0].components[0].options.map(s=>s.label),['Suporte','Dúvida','Receber Produto','Vaga Staff']);assert.match(payload.embeds[0].description,/08:00 às 11:00 e 20:30 às 22:00/);assert.match(payload.embeds[0].description,/10:00 às 21:00/);assert.deepEqual(payload.allowed_mentions.parse,[]);assert.equal(ticketPanel(panel,true).components.length,0);
- const buttons=ticketControls(panel.id).flatMap(r=>r.components);assert.equal(buttons.length,7);for(const b of buttons)assert(b.custom_id.length<=100);assert(buttons.some(b=>b.custom_id.includes('ticket-close')));
+ const buttons=ticketControls(panel.id).flatMap(r=>r.components);assert.equal(buttons.length,4);for(const b of buttons)assert(b.custom_id.length<=100);assert(buttons.some(b=>b.custom_id.includes('ticket-save-delete')));
 });
 test('ticket opening skips modal and stale panels cannot create a ticket',async()=>{
  const {ticketModal,submitTicketModal,modalValues}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');
@@ -128,4 +128,13 @@ test('ticket menu uses available local server emojis and never foreign or restri
  const panel=ticketPanel({id:'panel'},false,emojis);const options=panel.components[0].components[0].options;
  assert.deepEqual(options.map(o=>o.emoji.id),['1','2','3','4']);assert.match(panel.embeds[0].description,/<a:alliancearrows4:5>/);assert(!JSON.stringify(panel).includes('1434217902927646913'));
  const restricted=ticketPanel({id:'panel'},false,[{name:'suporte',id:'blocked',roles:['role'],available:true}]);assert(!JSON.stringify(restricted).includes('blocked'));
+});
+test('ticket panel selector protects staff tools and member controls belong to ticket owner',async()=>{
+ const {ticketActionButton}=await import('../supabase/functions/discord-interactions/ticket-actions.ts');
+ const db=actorDb('customer');db.rpc=async()=>({data:{ticket:{user_id:'profile',status:'open'},discord:{channel_id:'channel'}},error:null});
+ const input={guild_id:'guild',channel_id:'channel',data:{values:['staff']}};
+ await assert.rejects(()=>ticketActionButton(db,input,'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
+ const panel=await ticketActionButton(db,{...input,data:{values:['member']}},'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');assert.match(panel.content,/Painel Membro/);assert.equal(panel.components.length,2);
+ db.rpc=async()=>({data:{ticket:{user_id:'other',status:'open'},discord:{channel_id:'channel'}},error:null});
+ await assert.rejects(()=>ticketActionButton(db,{...input,data:{values:['member']}},'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
 });
