@@ -52,7 +52,7 @@ export function templateStructure(config: Record<string, unknown>): Desired[] {
     minimal: [['boas-vindas', 'INFORMAÇÕES'], ['produtos', 'LOJA'], ['suporte', 'SUPORTE'], ['logs', 'SUPORTE']],
     store_community: [['boas-vindas', 'INFORMAÇÕES'], ['regras', 'INFORMAÇÕES'], ['produtos', 'LOJA'], ['novidades', 'LOJA'], ['chat-geral', 'COMUNIDADE'], ['avaliações', 'COMUNIDADE'], ['abrir-ticket', 'SUPORTE'], ['logs', 'EQUIPE']],
     support_only: [['regras', 'INFORMAÇÕES'], ['abrir-ticket', 'SUPORTE'], ['dúvidas', 'SUPORTE'], ['logs-suporte', 'EQUIPE']],
-    digital_store: [['boas-vindas', 'INFORMAÇÕES'], ['regras', 'INFORMAÇÕES'], ['termos', 'INFORMAÇÕES'], ['produtos', 'LOJA'], ['pedidos', 'PEDIDOS'], ['avaliações', 'LOJA'], ['abrir-ticket', 'SUPORTE'], ['solicitar-produto', 'SUPORTE'], ['vendas', 'EQUIPE'], ['logs', 'EQUIPE']],
+    digital_store: [['boas-vindas', 'INFORMAÇÕES'], ['regras', 'INFORMAÇÕES'], ['termos', 'INFORMAÇÕES'], ['produtos', 'LOJA'], ['pedidos', 'PEDIDOS'], ['avaliações', 'LOJA'], ['abrir-ticket', 'SUPORTE'], ['solicitar-produto', 'SUPORTE'], ['dúvidas', 'SUPORTE'], ['vendas', 'EQUIPE'], ['logs', 'EQUIPE']],
   };
   const template = String(config.template || 'digital_store');
   if (!categories[template]) throw new Error('INVALID_TEMPLATE');
