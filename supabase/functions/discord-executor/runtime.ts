@@ -1,6 +1,6 @@
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {discordGet,ExecutorError} from './discord.ts';
-import {nexiumCommands} from './commands.ts';
+import {nexiumCommands,commandLabels} from './commands.ts';
 const applicationId='1557132199227031552';
 const endpointUrl='https://flcqndjlzuhmxxahjudj.supabase.co/functions/v1/discord-interactions';
 export async function connectRuntime(db:SupabaseClient,guildId:string,actorId:string,token:string) {
@@ -23,5 +23,5 @@ export async function connectRuntime(db:SupabaseClient,guildId:string,actorId:st
   if(verify.interactions_endpoint_url!==endpointUrl || !registered.every(r=>commands.some((c:{id:string})=>c.id===r.id)))throw new ExecutorError('RUNTIME_VERIFICATION_FAILED',502);
   const finished=await db.from('discord_runtime_configs').update({command_id:created.id,connected_at:new Date().toISOString()}).eq('application_id',applicationId);
   if(finished.error)throw new ExecutorError('DATABASE_ERROR',500);
-  return {endpoint_url:endpointUrl,command_id:created.id,commands:nexiumCommands.flatMap(c=>c.options.map(s=>`/${c.name} ${s.name}`)),signed_endpoint_verified:true};
+  return {endpoint_url:endpointUrl,command_id:created.id,commands:commandLabels(),signed_endpoint_verified:true};
 }

@@ -2,7 +2,7 @@ const string=(name:string,description:string,required=false)=>({type:3,name,desc
 const user=(name:string,description:string,required=true)=>({type:6,name,description,required});
 const ticket=()=>string('ticket','ID completo; omitido usa o canal do ticket');
 const sub=(name:string,description:string,options:unknown[]=[])=>({type:1,name,description,options});
-export const nexiumCommands=[
+const groupedCommands=[
  {name:'nexium',type:1,description:'Catálogo, conta, compras e suporte Nexium',options:[
   sub('teste','Verificar a conexão'),sub('ajuda','Ver comandos disponíveis'),sub('vincular','Conectar sua conta Nexium'),sub('pedidos','Consultar seus pedidos'),sub('catalogo','Ver produtos ativos'),
   sub('produto','Ver detalhes e opções',[string('produto','Nome, slug ou ID do produto',true)]),
@@ -35,3 +35,38 @@ export const nexiumCommands=[
   sub('configurar','Configurar IDs usados pelo bot',[{type:5,name:'pix',description:'Ativar/desativar PIX Discord'},{type:5,name:'cargo_cliente_apos_pago',description:'Conceder cargo Cliente após pagamento'},{type:5,name:'dm_pagamento',description:'Notificar cliente por DM após pagamento'},{type:5,name:'dm_entrega',description:'Notificar cliente por DM após entrega'},{type:7,name:'logs',description:'Canal de logs'},{type:8,name:'cliente',description:'Cargo Cliente'},{type:8,name:'suporte',description:'Cargo Suporte'},{type:7,name:'categoria_tickets',description:'Categoria para tickets',channel_types:[4]}]),
   sub('cupom','Criar cupom',[string('codigo','Código',true),{type:10,name:'desconto',description:'Percentual de desconto',required:true,min_value:1,max_value:99},{type:4,name:'limite',description:'Máximo de usos',required:true,min_value:1,max_value:10000}])]},
 ];
+
+// Familiar shortcuts reuse the same handlers, authorization and checkout protections.
+export const commandAliases:Record<string,{command:string;sub:string}>={
+ admin:{command:'nexium-admin',sub:'dashboard'},botconfig:{command:'nexium-admin',sub:'configurar'},
+ cupom:{command:'nexium-admin',sub:'cupom'},lock:{command:'nexium-admin',sub:'lock'},unlock:{command:'nexium-admin',sub:'unlock'},
+ 'meus-pedidos':{command:'nexium',sub:'pedidos'},meu_perfil:{command:'nexium',sub:'perfil'},
+ payment:{command:'nexium',sub:'comprar'},payments:{command:'nexium',sub:'pagamento'},
+ gerenciar_stock:{command:'nexium-admin',sub:'estoque'},gerenciar_produto:{command:'nexium-admin',sub:'produto'},gerenciar_item:{command:'nexium-admin',sub:'produto'},
+ anunciar:{command:'nexium-admin',sub:'anunciar'},'painel-estoque':{command:'nexium-admin',sub:'painel-estoque'},
+ rank:{command:'nexium-admin',sub:'suportes'},'rank-produtos':{command:'nexium-admin',sub:'ranking-produtos'},
+};
+function shortcut(name:string,description:string,options:any[]=[]){
+ const target=commandAliases[name];
+ return {name,type:1,description,options,...(target.command==='nexium-admin'?{default_member_permissions:'32'}:{})};
+}
+function existingOptions(command:string,subName:string):any[]{return groupedCommands.find(c=>c.name===command)!.options.find(s=>s.name===subName)!.options;}
+export const nexiumCommands=[...groupedCommands,
+ shortcut('admin','Abrir a central administrativa privada'),
+ shortcut('botconfig','Configurar o bot Nexium',existingOptions('nexium-admin','configurar')),
+ shortcut('cupom','Criar cupom de desconto',existingOptions('nexium-admin','cupom')),
+ shortcut('lock','Bloquear este canal após preview'),shortcut('unlock','Restaurar o bloqueio deste canal após preview'),
+ shortcut('meus-pedidos','Consultar seu histórico de compras'),shortcut('meu_perfil','Ver sua conta Nexium vinculada'),
+ shortcut('payment','Comprar um produto com Pix',existingOptions('nexium','comprar')),
+ shortcut('payments','Consultar o Pix de seu pedido',existingOptions('nexium','pagamento')),
+ shortcut('gerenciar_stock','Consultar ou repor estoque real',[
+  {...string('acao','Ação desejada'),choices:[{name:'Consultar',value:'consultar'},{name:'Repor unidades',value:'repor'}]},string('produto','Nome, slug ou ID; obrigatório para repor')]),
+ shortcut('gerenciar_produto','Consultar produto e acessar a gestão da loja',[string('produto','Nome, slug ou ID',true)]),
+ shortcut('gerenciar_item','Consultar item e suas opções',[string('produto','Nome, slug ou ID',true)]),
+ shortcut('anunciar','Publicar anúncio neste canal ou em um canal escolhido',[
+  string('texto','Texto do anúncio (sem menções automáticas)',true),{type:7,name:'canal',description:'Canal de texto; vazio usa atual',channel_types:[0,5]}]),
+ shortcut('painel-estoque','Atualizar o painel existente de solicitação de produtos'),
+ shortcut('rank','Consultar atendimentos da equipe neste mês'),
+ shortcut('rank-produtos','Ver os produtos mais vendidos',existingOptions('nexium-admin','financeiro')),
+];
+export function commandLabels(){return nexiumCommands.map(c=>`/${c.name}${c.options.some(o=>o.type===1)?': '+c.options.map(o=>o.name).join(' • '):''}`);}

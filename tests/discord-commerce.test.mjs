@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {nexiumCommands} from '../supabase/functions/discord-executor/commands.ts';
+import {nexiumCommands,commandAliases} from '../supabase/functions/discord-executor/commands.ts';
 import {webhookProof,sanitiseCharge,pixResponse,startPurchase} from '../supabase/functions/discord-interactions/payments.ts';
 import {deliverResponse,qrAttachment} from '../supabase/functions/discord-interactions/delivery.ts';
-import {route,eventAction} from '../supabase/functions/discord-interactions/router.ts';
+import {route,eventAction,commandParts} from '../supabase/functions/discord-interactions/router.ts';
 import {restockUnits,restockModal} from '../supabase/functions/discord-interactions/restock.ts';
 import {lockOverwrites,canonicalOverwrites} from '../supabase/functions/discord-interactions/moderation.ts';
 import {authorisedOrderContext} from '../supabase/functions/discord-interactions/ai.ts';
@@ -12,8 +12,11 @@ import {sendScheduled} from '../supabase/functions/discord-scheduler/worker.ts';
 import {discord,fortalezaMonthStart} from '../supabase/functions/discord-interactions/api.ts';
 test('Discord manifest conforms to command limits and keeps mandatory options before optional',()=>{
  const names=new Set();let count=0;
- for(const c of nexiumCommands){assert(!names.has(c.name));names.add(c.name);assert(c.options.length<=25);for(const s of c.options){count++;assert.match(s.name,/^[a-z0-9-]{1,32}$/);assert(s.description.length<=100);assert(s.options.length<=25);let optional=false;for(const o of s.options){if(o.required)assert.equal(optional,false,`${s.name}:${o.name}`);else optional=true;}}}
- assert.equal(count,48);assert.equal(nexiumCommands.find(c=>c.name==='nexium-admin').default_member_permissions,'32');
+ function validateOptions(options){assert(options.length<=25);let optional=false;for(const o of options){assert.match(o.name,/^[a-z0-9_-]{1,32}$/);assert(o.description.length<=100);if(o.type===1){count++;validateOptions(o.options);continue;}if(o.required)assert.equal(optional,false,o.name);else optional=true;}}
+ for(const c of nexiumCommands){assert(!names.has(c.name));names.add(c.name);assert.match(c.name,/^[a-z0-9_-]{1,32}$/);assert(c.description.length<=100);validateOptions(c.options);}
+ assert.equal(count,48);assert.equal(nexiumCommands.length,19);assert.equal(nexiumCommands.find(c=>c.name==='nexium-admin').default_member_permissions,'32');
+ for(const [name,target] of Object.entries(commandAliases))if(target.command==='nexium-admin')assert.equal(nexiumCommands.find(c=>c.name===name).default_member_permissions,'32');
+
 });
 test('callback proof is tied to order and secret, provider payload strips confidential fields',async()=>{
  const first=await webhookProof('order1','secret1');assert.match(first,/^[a-f0-9]{64}$/);
@@ -137,4 +140,36 @@ test('ticket panel selector protects staff tools and member controls belong to t
  const panel=await ticketActionButton(db,{...input,data:{values:['member']}},'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');assert.match(panel.content,/Painel Membro/);assert.equal(panel.components.length,2);
  db.rpc=async()=>({data:{ticket:{user_id:'other',status:'open'},discord:{channel_id:'channel'}},error:null});
  await assert.rejects(()=>ticketActionButton(db,{...input,data:{values:['member']}},'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
+});
+
+
+test('legacy shortcuts preserve flat parameters and route through the same protected handlers',async()=>{
+ assert.deepEqual(commandParts({data:{name:'payment',options:[{name:'produto',value:'Netflix'},{name:'cupom',value:'NEXIUM10'}]}}),{command:'nexium',sub:'comprar',options:{produto:'Netflix',cupom:'NEXIUM10'}});
+ assert.deepEqual(commandParts({data:{name:'gerenciar_stock',options:[{name:'acao',value:'repor'},{name:'produto',value:'Netflix'}]}}),{command:'nexium-admin',sub:'restock',options:{acao:'repor',produto:'Netflix'}});
+ assert.throws(()=>commandParts({data:{name:'gerenciar_stock',options:[{name:'acao',value:'repor'}]}}),e=>e.code==='PRODUCT_REQUIRED');
+ for(const [name,target] of Object.entries(commandAliases))if(target.command==='nexium-admin')await assert.rejects(()=>route(actorDb('customer'),{type:2,data:{name}},'customer'),e=>e.code==='FORBIDDEN');
+ await assert.rejects(()=>restockModal(actorDb('customer'),{type:2,data:{name:'gerenciar_stock',options:[{name:'acao',value:'repor'},{name:'produto',value:'Netflix'}]}},'customer'),e=>e.code==='FORBIDDEN');
+ await assert.rejects(()=>route(actorDb('customer'),{type:3,data:{custom_id:'nexium:admin-menu:v1',values:['financeiro']}},'customer'),e=>e.code==='FORBIDDEN');
+});
+
+test('profile shortcut scopes counts to the linked owner and omits email and credentials',async()=>{
+ const filters=[];const db={from(table){return{select(){return this},eq(key,value){filters.push({table,key,value});return this},maybeSingle:async()=>({data:{profile_id:'linked-profile'},error:null}),single:async()=>({data:{id:'linked-profile',role:'customer',full_name:'Cliente'},error:null}),then(resolve){return Promise.resolve({count:4,error:null}).then(resolve)}}}};
+ const card=await route(db,{type:2,data:{name:'meu_perfil'}},'discord-id');
+ assert.match(card.content,/4/);assert(filters.some(f=>f.table==='orders'&&f.key==='user_id'&&f.value==='linked-profile'));assert.deepEqual(card.allowed_mentions.parse,[]);
+});
+
+test('announcements validate guild and suppress mentions with an interaction nonce',async()=>{
+ const {announce}=await import('../supabase/functions/discord-interactions/shortcuts.ts');
+ const previousFetch=globalThis.fetch,previousDeno=globalThis.Deno;const requests=[];
+ globalThis.Deno={env:{get:()=> 'test-token'}};
+ const db={from(){return{insert:async()=>({data:null,error:null})}}};
+ const input={id:'999999999999999999',guild_id:'guild',channel_id:'999999999999999990'};
+ globalThis.fetch=async(url,options)=>{requests.push({url,options});return new Response(JSON.stringify(options.method==='GET'?{guild_id:'guild',type:0}:{id:'posted'}));};
+ try{
+  const result=await announce(db,input,'admin',{texto:'Anúncio @everyone'});assert.match(result.content,/posted/);
+  const payload=JSON.parse(requests[1].options.body);assert.deepEqual(payload.allowed_mentions.parse,[]);assert.equal(payload.nonce,input.id);assert.equal(payload.enforce_nonce,true);
+  globalThis.fetch=async()=>new Response(JSON.stringify({guild_id:'different-guild',type:0}));
+  await assert.rejects(()=>announce(db,input,'admin',{texto:'Anúncio'}),e=>e.code==='WRONG_PANEL_CHANNEL');
+  await assert.rejects(()=>announce(db,input,'admin',{texto:' '.repeat(3)}),e=>e.code==='INVALID_ANNOUNCEMENT');
+ }finally{globalThis.fetch=previousFetch;globalThis.Deno=previousDeno;}
 });
