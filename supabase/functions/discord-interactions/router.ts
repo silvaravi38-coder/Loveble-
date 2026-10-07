@@ -91,7 +91,7 @@ export async function route(db:SupabaseClient,input:any,userId:string) {
   if(['ticket-staff','ticket-payment','ticket-delete','ticket-delete-confirm','ticket-manage'].includes(parts[1]))return ticketActionButton(db,input,userId,parts[1],parts[2]);
   if(parts[1]==='ticket-open'){
    if(!uuid(parts[2]))throw new BotError('INVALID_ID');const panel=checked(await db.from('discord_sales_panels').select('*').eq('id',parts[2]).eq('guild_id',input.guild_id).eq('channel_id',input.channel_id).eq('active',true).eq('panel_kind','tickets').maybeSingle());
-   if(!panel||panel.message_id!==input.message?.id)throw new BotError('PANEL_PRODUCT_MISMATCH');const subject=ticketSubjects.find(s=>s.value===input.data.values?.[0]);if(!subject)throw new BotError('INVALID_TICKET_FORM');return openTicket(db,input,userId,subject.label);
+   if(!panel||panel.message_id!==input.message?.id)throw new BotError('PANEL_PRODUCT_MISMATCH');const subject=ticketSubjects.find(s=>s.value===(parts[3]||input.data.values?.[0]));if(!subject)throw new BotError('INVALID_TICKET_FORM');return openTicket(db,input,userId,subject.label);
   }
   if(parts[1]==='panel'){const product=input.data.values?.[0];await ownedPanel(db,input,parts[2],product,true);return productDetails(db,product,parts[2]);}
   if(parts[1]==='buy'||parts[1]==='variant'){

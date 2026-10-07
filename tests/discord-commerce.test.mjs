@@ -64,7 +64,7 @@ test('help lists the published commands and support month respects Fortaleza at 
 test('ticket panel selects original Nexium subjects and unpublish removes all controls',async()=>{
  const {ticketPanel,ticketControls}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');
  const panel={id:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',name:'Atendimento Nexium'};
- const payload=ticketPanel(panel);assert.equal(payload.components[0].components[0].type,3);assert.equal(payload.components[0].components[0].options.length,4);assert.deepEqual(payload.allowed_mentions.parse,[]);assert.equal(ticketPanel(panel,true).components.length,0);
+ const payload=ticketPanel(panel);assert.equal(payload.components[0].components[0].type,2);assert.equal(payload.components[0].components.length,4);assert.match(payload.embeds[0].description,/08:00 às 11:00 e 20:30 às 22:00/);assert.match(payload.embeds[0].description,/10:00 às 21:00/);assert.deepEqual(payload.allowed_mentions.parse,[]);assert.equal(ticketPanel(panel,true).components.length,0);
  const buttons=ticketControls(panel.id).flatMap(r=>r.components);assert.equal(buttons.length,7);for(const b of buttons)assert(b.custom_id.length<=100);assert(buttons.some(b=>b.custom_id.includes('ticket-close')));
 });
 test('ticket opening skips modal and stale panels cannot create a ticket',async()=>{

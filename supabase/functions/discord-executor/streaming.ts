@@ -43,5 +43,7 @@ export async function syncStreaming(db:SupabaseClient,guild:string,actor:string)
  const requestSource=checked(await db.from('discord_resource_mappings').select('*').eq('guild_id',guild).eq('logical_key','panel:channel:solicitarproduto').eq('resource_type','message').single());
  const requestMessage=await syncInformationMessage(requestSource.parent_id,requestSource.discord_id,productRequestPanel(),'panel:channel:solicitarproduto','1557132199227031552',Deno.env.get('DISCORD_BOT_TOKEN')!);
  if(requestMessage.id!==requestSource.discord_id)checked(await db.rpc('discord_bind_resource',{p_resource:{...requestSource,discord_id:requestMessage.id}}));
- return {panels:results,index:indexMessage,request_panel_message:requestMessage.id};
+ const ticketPanels=checked(await db.from('discord_sales_panels').select('id,channel_id').eq('guild_id',guild).eq('panel_kind','tickets').eq('active',true)) as any[];
+ for(const panel of ticketPanels)await publishPanel(db,guild,panel.channel_id,actor,panel.id);
+ return {panels:results,index:indexMessage,request_panel_message:requestMessage.id,ticket_panels_synced:ticketPanels.length};
 }
