@@ -26,3 +26,10 @@ test('order responses do not include credentials, delivery text or amounts and s
  assert.equal(JSON.stringify(response).includes('SECRET'),false);assert.deepEqual(response.allowed_mentions.parse,[]);
  assert.match(orderMessage([]).content,/Nenhum pedido/);assert.deepEqual(privateMessage('@everyone').allowed_mentions.parse,[]);
 });
+
+import {streamingTargets} from '../supabase/functions/discord-executor/streaming.ts';
+test('streaming routing recognizes existing obfuscated channels and excludes other subscriptions',()=>{
+ const targets=streamingTargets([{id:'n',name:'Netflix'},{id:'s',name:'Spotify Premium'},{id:'d',name:'Disney+'},{name:'Duolingo'},{name:'CapCut Pro'}],[{id:'netflix',name:'📺・n3tefl1x',type:0},{id:'spotify',name:'📦・spotify',type:0}]);
+ assert.equal(targets.length,3);assert.equal(targets[0].channel.id,'netflix');assert.equal(targets[1].channel.id,'spotify');assert.equal(targets[2].channel,undefined);
+ assert.throws(()=>streamingTargets([{name:'Netflix'}],[{name:'netflix',type:0},{name:'n3tefl1x',type:0}]),/AMBIGUOUS_STREAMING_CHANNEL/);
+});

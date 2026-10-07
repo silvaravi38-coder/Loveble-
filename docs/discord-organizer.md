@@ -46,3 +46,9 @@ O backup é estrutural: não recupera mensagens apagadas, convites nem IDs
 originais após exclusão. Reconstrução destrutiva e restauração completa
 continuam bloqueadas. O fluxo de clique do cliente deve ser conferido em uma
 conta vinculada no Discord; não se falsificam interações assinadas para esse teste.
+
+### Streaming product cards
+
+The service-only, admin-validated dispatch `sync` with target `streaming_catalog` reads the active site products and live guild channels. It recognizes Netflix/n3tefl1x, Spotify and YouTube/y0utub3 and creates missing streaming channels under the existing unambiguous Assinaturas category. Duplicate channel matches block publication. Supported services also include Crunchyroll, Disney+, Globoplay, HBO Max, Paramount+ and Prime Video.
+
+Each product uses a stable `streaming-${product.id}` panel slug, keeping its channel and message IDs across synchronization. Single-product cards display the site image, description, current plans/prices and available automatic stock; purchases revalidate stock and price in the existing atomic checkout. Manual products do not display an invented stock count. Synchronization is explicit; displayed stock is a snapshot, not a live counter. Other bots' messages are preserved. A channel change requires review. The general store panel and ticket panels remain separate.
