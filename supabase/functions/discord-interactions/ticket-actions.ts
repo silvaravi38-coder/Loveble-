@@ -1,3 +1,4 @@
+import {isTicketChannel} from './ticket-channel.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {actorFor,checked,BotError,discord,row,button,uuid,audit} from './api.ts';
 import {privateMessage} from './security.ts';
@@ -5,7 +6,7 @@ import {ticketRpc,captureTranscript,actTicket} from './tickets.ts';
 import {catalogue} from './catalog.ts';
 import {paymentStatus} from './payments.ts';
 export function channelFingerprint(channel:any){return JSON.stringify({id:channel.id,guild:channel.guild_id,type:channel.type,name:channel.name,topic:channel.topic,parent:channel.parent_id,permissions:[...(channel.permission_overwrites||[])].sort((a,b)=>a.id.localeCompare(b.id))});}
-export function requireDeletableTicket(view:any,channel:any,guild:string){if(!view.discord.closed_at||!['resolved','closed'].includes(view.ticket.status))throw new BotError('TICKET_CLOSE_BEFORE_DELETE');if(view.discord.deleted_at||view.discord.channel_state!=='ready'||channel.id!==view.discord.channel_id||channel.guild_id!==guild||channel.type!==0||channel.topic!==`Nexium ticket ${view.ticket.id}`)throw new BotError('PROTECTED_TICKET_CHANNEL');}
+export function requireDeletableTicket(view:any,channel:any,guild:string){if(!view.discord.closed_at||!['resolved','closed'].includes(view.ticket.status))throw new BotError('TICKET_CLOSE_BEFORE_DELETE');if(view.discord.deleted_at||view.discord.channel_state!=='ready'||!isTicketChannel(channel,guild,view.ticket.id,view.discord.channel_id))throw new BotError('PROTECTED_TICKET_CHANNEL');}
 export async function ticketActionButton(db:SupabaseClient,input:any,user:string,action:string,id:string){
  if(action==='ticket-delete-confirm')return confirmDelete(db,input,user,id);
  if(!uuid(id))throw new BotError('INVALID_ID');const actor=await actorFor(db,user),view=await ticketRpc(db,user,input.guild_id,'view',id);

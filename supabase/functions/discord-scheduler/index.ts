@@ -1,3 +1,4 @@
+import {verifyPrivateThread} from '../discord-interactions/thread-diagnostic.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {runWorker} from './worker.ts';
 import {auditFunctions} from '../discord-interactions/function-audit.ts';
@@ -14,13 +15,14 @@ Deno.serve(async(req:Request)=>{
  try{
   const body=await req.json().catch(()=>({}));
   // Private support diagnostic: replay only an unclaimed ticket owned by a linked administrator.
-  if(body.action==='verify_ai'||body.action==='verify_bot'){
+  if(body.action==='verify_ai'||body.action==='verify_bot'||body.action==='verify_thread'){
    if(!uuid(body.ticket_id))return json({error:'INVALID_ID'},400);
    const ticket=checked(await db.from('support_tickets').select('user_id,assigned_to,status').eq('id',body.ticket_id).single());
    const owner=checked(await db.from('profiles').select('role').eq('id',ticket.user_id).single());
    const map=checked(await db.from('discord_tickets').select('guild_id,channel_id,channel_state').eq('ticket_id',body.ticket_id).is('closed_at',null).single());
    const link=checked(await db.from('discord_account_links').select('discord_user_id').eq('profile_id',ticket.user_id).single());
    if(owner.role!=='admin'||ticket.assigned_to||!['open','in_progress'].includes(ticket.status)||map.channel_state!=='ready')return json({error:'FORBIDDEN'},403);
+   if(body.action==='verify_thread')return json(await verifyPrivateThread(db,map.guild_id,link.discord_user_id));
    if(body.action==='verify_bot')return json(await auditFunctions(db,map.guild_id,link.discord_user_id,map.channel_id,body.ticket_id));
    await ticketAi(db,link.discord_user_id,map.guild_id,body.ticket_id,'reply');return json({ok:true,verified_ai:true});
   }

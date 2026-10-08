@@ -2,6 +2,7 @@ import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {groqReply} from './support-provider.ts';
 import {parseStoreAIReply} from './store-ai.ts';
 import {ticketAi} from './ai.ts';
+import {isTicketChannel} from './ticket-channel.ts';
 import {route} from './router.ts';
 import {checked,discord,BotError} from './api.ts';
 import {nexiumCommands} from '../discord-executor/commands.ts';
@@ -46,6 +47,6 @@ export async function auditFunctions(db:SupabaseClient,guild:string,user:string,
  await run('commands:registered',async()=>{const actual=await discord(`/applications/1557132199227031552/guilds/${guild}/commands`);for(const c of nexiumCommands){const found=actual.find((a:any)=>a.name===c.name);if(!found)throw new BotError('COMMAND_MISSING');for(const option of c.options||[])if(!found.options?.some((o:any)=>o.name===option.name))throw new BotError('COMMAND_OPTION_MISSING');}return {};},false);
  const panels=checked(await db.from('discord_sales_panels').select('id,channel_id,message_id').eq('guild_id',guild).eq('active',true).eq('sync_status','synced')) as any[];
  for(const p of panels)await run('panel:'+p.id,async()=>{if(!p.message_id)throw new BotError('PANEL_NOT_PUBLISHED');const message=await discord(`/channels/${p.channel_id}/messages/${p.message_id}`);if(message.author?.id!=='1557132199227031552')throw new BotError('PANEL_NOT_OWNED');return message;});
- await run('ticket:access',async()=>{const c=await discord(`/channels/${channel}`);if(c.guild_id!==guild||!c.permission_overwrites?.some((o:any)=>o.id===user&&(BigInt(o.allow)&1024n)!==0n))throw new BotError('TICKET_OWNER_ACCESS_MISSING');return {};},false);
+ await run('ticket:access',async()=>{const c=await discord(`/channels/${channel}`);if(c.type===12){if(!isTicketChannel(c,guild,ticket,channel))throw new BotError('PROTECTED_TICKET_CHANNEL');await discord(`/channels/${channel}/thread-members/${user}`);return {};}if(c.guild_id!==guild||!c.permission_overwrites?.some((o:any)=>o.id===user&&(BigInt(o.allow)&1024n)!==0n))throw new BotError('TICKET_OWNER_ACCESS_MISSING');return {};},false);
  return {ok:checks.every(c=>c.ok),total:checks.length,passed:checks.filter(c=>c.ok).length,checks:checks.sort((a,b)=>a.name.localeCompare(b.name))};
 }

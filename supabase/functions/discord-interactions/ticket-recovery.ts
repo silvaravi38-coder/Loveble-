@@ -1,3 +1,4 @@
+import {isTicketChannel,threadMemberAccess} from './ticket-channel.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,discord} from './api.ts';
 export function ownerTicketOverwrite(channel:any,user:string,guild:string,ticket:string){
@@ -18,6 +19,7 @@ export async function checkTicketChannel(db:SupabaseClient,user:string,guild:str
   if(!(error instanceof BotError)||error.code!=='DISCORD_RESOURCE_NOT_FOUND')throw error;
   checked(await db.rpc('discord_reconcile_missing_ticket',{p_user:user,p_guild:guild,p_ticket:ticket.ticket_id,p_channel:ticket.channel_id,p_reason:'channel_missing'}));return;
  }
+ if(channel.type===12){if(!isTicketChannel(channel,guild,ticket.ticket_id,ticket.channel_id))throw new BotError('PROTECTED_TICKET_CHANNEL');await threadMemberAccess(channel,user,false,request);return;}
  const repair=ownerTicketOverwrite(channel,user,guild,ticket.ticket_id);
  if(repair)await request(`/channels/${ticket.channel_id}/permissions/${user}`,'PUT',repair);
 }

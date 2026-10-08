@@ -1,5 +1,6 @@
+import {createPrivateTicketThread,threadMemberAccess,isTicketChannel} from './ticket-channel.ts';
 import {recoverOwnerTickets} from './ticket-recovery.ts';
-import {ticketChannelName,deleteClosedTicketChannel} from './ticket-lifecycle.ts';
+import {deleteClosedTicketChannel} from './ticket-lifecycle.ts';
 import {ticketCard,refreshTicketCard} from './ticket-card.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,discord,audit,actorFor,uuid,snowflake,safeText,row,button} from './api.ts';
@@ -21,16 +22,21 @@ export async function openTicket(db:SupabaseClient,input:any,user:string,reason:
  const created=await ticketRpc(db,user,input.guild_id,'open',null,{reason:reason.trim(),order_id:order||null,interaction_id:input.id});
  if(created.reused)return {...privateMessage(created.channel_id?`🎫 Você já tem um atendimento para este assunto: <#${created.channel_id}>`:'🎫 Este atendimento já foi solicitado. Aguarde ou peça à equipe para revisar a abertura.'),components:created.channel_id?[row([{type:2,style:5,label:'Ir para meu ticket',url:`https://discord.com/channels/${input.guild_id}/${created.channel_id}`}])]:[]};
  checked(await db.from('support_messages').insert({ticket_id:created.ticket_id,sender_id:actor.id,sender_role:actor.role,sender_name:actor.full_name,message:reason}));
- const config=checked(await db.from('discord_bot_settings').select('category_support_id,role_support_id,role_manager_id').eq('guild_id',input.guild_id).maybeSingle());
- const mappings=checked(await db.from('discord_resource_mappings').select('logical_key,discord_id').eq('guild_id',input.guild_id).in('logical_key',['role:suporte','role:gerente'])) as any[];
- const staff=[config?.role_support_id,config?.role_manager_id,...mappings.map(r=>r.discord_id)].filter((id,index,all)=>id&&all.indexOf(id)===index);
- const access='117760',overwrites=[{id:input.guild_id,type:0,allow:'0',deny:'1024'},{id:user,type:1,allow:access,deny:'0'},{id:'1557132199227031552',type:1,allow:access,deny:'0'},...staff.map(id=>({id,type:0,allow:access,deny:'0'}))];
  let createdChannel:string|undefined;
  try{
-  if(config?.category_support_id){const category=await discord(`/channels/${config.category_support_id}`);if(category.guild_id!==input.guild_id||category.type!==4)throw new BotError('INVALID_TICKET_CATEGORY');}
-  const channel=await discord(`/guilds/${input.guild_id}/channels`,'POST',{name:ticketChannelName(reason,created.ticket_id),type:0,...(config?.category_support_id?{parent_id:config.category_support_id}:{}),permission_overwrites:overwrites,topic:`Nexium ticket ${created.ticket_id}`});
+ const config=checked(await db.from('discord_bot_settings').select('role_support_id').eq('guild_id',input.guild_id).maybeSingle());
+ const panels=checked(await db.from('discord_sales_panels').select('channel_id').eq('guild_id',input.guild_id).eq('active',true).eq('panel_kind','tickets').eq('sync_status','synced').order('created_at',{ascending:false}).limit(25)) as any[];
+ const parentId=panels.find(p=>p.channel_id===input.channel_id)?.channel_id||panels[0]?.channel_id;
+ if(!parentId)throw new BotError('TICKET_PANEL_REQUIRED');
+ const parent=await discord(`/channels/${parentId}`);if(parent.guild_id!==input.guild_id||parent.type!==0)throw new BotError('INVALID_TICKET_PARENT');
+  const channel=await createPrivateTicketThread(parent,input.guild_id,created.ticket_id,reason,input.member.user);
   createdChannel=channel.id;
-  checked(await db.from('discord_tickets').update({channel_id:channel.id,channel_state:'ready'}).eq('ticket_id',created.ticket_id));
+  checked(await db.from('discord_tickets').update({channel_id:channel.id,channel_state:'uncertain'}).eq('ticket_id',created.ticket_id));
+  await threadMemberAccess(channel,user);
+  const team=checked(await db.from('profiles').select('id').in('role',['admin','support']).limit(50)) as any[];
+  const links=team.length?checked(await db.from('discord_account_links').select('discord_user_id').in('profile_id',team.map(p=>p.id))):[];
+  for(const member of links){if(member.discord_user_id===user)continue;try{await discord(`/guilds/${input.guild_id}/members/${member.discord_user_id}`);await threadMemberAccess(channel,member.discord_user_id);}catch(error){if(!(error instanceof BotError)||error.code!=='DISCORD_RESOURCE_NOT_FOUND')throw error;}}
+  checked(await db.from('discord_tickets').update({channel_state:'ready'}).eq('ticket_id',created.ticket_id));
   const ticket=checked(await db.from('support_tickets').select('*').eq('id',created.ticket_id).single());
   const payload=ticketCard(created.ticket_id,{...ticket,subject:reason},input.member.user,null,config?.role_support_id);
   const welcome=await discord(`/channels/${channel.id}/messages`,'POST',{...payload,content:`<@${user}>${config?.role_support_id?` • <@&${config.role_support_id}>`:''}`,allowed_mentions:{parse:[],users:[user],roles:config?.role_support_id?[config.role_support_id]:[]}});
@@ -76,13 +82,16 @@ export async function actTicket(db:SupabaseClient,input:any,userId:string,action
   }
  }
  const result=await ticketRpc(db,userId,input.guild_id,action,id,{...options,message:options.text,reason:options.reason,outcome:options.outcome,stars:options.stars,comment:options.comment,priority:options.priority,target:options.target});
- if((action==='claim'||action==='transfer')&&channelId)await discord(`/channels/${channelId}/permissions/${action==='claim'?userId:options.target}`,'PUT',{type:1,allow:'117760',deny:'0'});
+ if(['claim','transfer','add_member','remove_member'].includes(action)&&channelId){
+  const channel=await discord(`/channels/${channelId}`);if(!isTicketChannel(channel,input.guild_id,id,channelId))throw new BotError('PROTECTED_TICKET_CHANNEL');
+  const member=action==='claim'?userId:options.target;
+  if(channel.type===12)await threadMemberAccess(channel,member,action==='remove_member');
+  else await discord(`/channels/${channelId}/permissions/${member}`,action==='remove_member'?'DELETE':'PUT',action==='remove_member'?undefined:{type:1,allow:'117760',deny:'0'});
+ }
  if(action==='message'&&channelId)await discord(`/channels/${channelId}/messages`,'POST',{content:`${safeText(actor.full_name,100)}: ${safeText(options.text,1800)}`,allowed_mentions:{parse:[]}});
  if(action==='message'&&actor.role!=='admin'&&actor.role!=='support'){try{await ticketAi(db,userId,input.guild_id,id,'reply');}catch{ /* Disabled, paused or provider failure never prevents staff support. */ }}
  if(['claim','transfer','priority'].includes(action)){try{await refreshTicketCard(db,result);}catch{/* Ticket state remains authoritative; do not repeat a completed action for a card failure. */}}
  if(action==='claim')return privateMessage(`Ticket assumido por **${safeText(input.member?.nick||input.member?.user?.global_name||input.member?.user?.username||actor.full_name||'Atendente',100)}**.`);
- if(action==='add_member')await discord(`/channels/${channelId}/permissions/${options.target}`,'PUT',{type:1,allow:'117760',deny:'0'});
- if(action==='remove_member')await discord(`/channels/${channelId}/permissions/${options.target}`,'DELETE');
  const afterDelivery=(action==='close'||action==='cancel')&&channelId?async()=>{
   await deleteClosedTicketChannel(result,input.guild_id);
   checked(await db.from('discord_tickets').update({deleted_at:new Date().toISOString()}).eq('ticket_id',id));

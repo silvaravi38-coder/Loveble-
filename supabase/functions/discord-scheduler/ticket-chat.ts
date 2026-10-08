@@ -1,3 +1,4 @@
+import {isTicketChannel} from '../discord-interactions/ticket-channel.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {discord,checked,BotError,snowflake} from '../discord-interactions/api.ts';
 import {ticketAi} from '../discord-interactions/ai.ts';
@@ -10,7 +11,7 @@ export async function pollTicketChat(db:SupabaseClient,record:any,send=discord,r
  let error:string|null=null,replied=false;
  try{
   const channel=await send(`/channels/${record.channel_id}`);
-  if(channel.guild_id!==record.guild_id||channel.type!==0||channel.topic!==`Nexium ticket ${record.ticket_id}`)throw new BotError('WRONG_TICKET_CHANNEL');
+  if(!isTicketChannel(channel,record.guild_id,record.ticket_id,record.channel_id))throw new BotError('WRONG_TICKET_CHANNEL');
   const messages=await send(`/channels/${record.channel_id}/messages?limit=100${record.cursor?`&after=${record.cursor}`:''}`) as any[];
   const owned=ownerChatMessages(messages,record.discord_user_id,record.cursor);
   // Discord redacts content unless Message Content Intent is enabled. Preserve the cursor to recover later.

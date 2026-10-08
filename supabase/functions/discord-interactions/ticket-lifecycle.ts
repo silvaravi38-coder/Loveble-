@@ -1,3 +1,4 @@
+import {isTicketChannel} from './ticket-channel.ts';
 import {BotError,discord} from './api.ts';
 export function ticketChannelName(reason:string,id:string){
  const subjects:Record<string,string>={'Suporte':'suporte','Dúvida':'duvida','Receber Produto':'receber-produto','Vaga Staff':'vaga-staff','Ajuda com produto':'ajuda-produto','Compra e entrega':'compra-entrega','Pagamento PIX':'pagamento-pix','Outros assuntos':'outros-assuntos'};
@@ -11,6 +12,6 @@ export async function deleteClosedTicketChannel(view:any,guild:string,request:ty
  const path=`/channels/${view.discord.channel_id}`;
  let channel;
  try{channel=await request(path);}catch(error){if(error instanceof BotError&&error.code==='DISCORD_RESOURCE_NOT_FOUND')return;throw error;}
- if(channel.guild_id!==guild||channel.type!==0||channel.id!==view.discord.channel_id||channel.topic!==`Nexium ticket ${view.ticket.id}`||view.discord.channel_state!=='ready')throw new BotError('PROTECTED_TICKET_CHANNEL');
+ if(!isTicketChannel(channel,guild,view.ticket.id,view.discord.channel_id)||view.discord.channel_state!=='ready')throw new BotError('PROTECTED_TICKET_CHANNEL');
  try{await request(path,'DELETE');}catch(error){if(!(error instanceof BotError)||error.code!=='DISCORD_RESOURCE_NOT_FOUND')throw error;}
 }

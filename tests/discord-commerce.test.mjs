@@ -50,7 +50,7 @@ test('ticket chat verifies channel ownership, honours atomic deduplication and r
  const record={ticket_id:'ticket',channel_id:'channel',guild_id:'guild',discord_user_id:'owner',lease:'lease',cursor:'1557242989489950720'};
  let imports=0,replies=0,updates=[];
  const db={rpc:async()=>{imports++;return {data:0,error:null}},from(){return {update(x){updates.push(x);return this},eq(){return this},then(resolve){return Promise.resolve({data:null,error:null}).then(resolve)}}}};
- let channel={guild_id:'guild',type:0,topic:'Nexium ticket ticket'};
+ let channel={id:'channel',guild_id:'guild',type:0,topic:'Nexium ticket ticket'};
  let messages=[{id:'1557242989489950721',type:0,author:{id:'owner'},content:'Oi',timestamp:new Date().toISOString()}];
  const send=async(path)=>path.includes('/messages?')?messages:channel,reply=async()=>{replies++};
  assert.equal(await pollTicketChat(db,record,send,reply),null);assert.equal(imports,1);assert.equal(replies,0);assert.equal('last_error' in updates[0],false);
@@ -421,4 +421,29 @@ test('administrative AI uses Groq and creates only a reviewed proposal, never a 
  globalThis.fetch=async(url,init)=>{assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');assert.match(JSON.parse(init.body).messages[0].content,/Não execute ações/);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({text:'Revise a proposta.',proposal:{kind:'config',field:'pix_enabled',value:false}})}}]}));};
  const db={rpc:async()=>({data:{max_tokens:800},error:null}),from(table){const q={select(){return q},eq(){return q},order(){return q},limit(){return q},update(value){assert.equal(table,'discord_store_operations');writes.push(value);return q},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{},error:null}),single:async()=>({data:table==='profiles'?{id:'admin',role:'admin'}:{id:'11111111-1111-4111-8111-111111111111'},error:null}),then(resolve){return Promise.resolve({data:[],error:null}).then(resolve)}};return q;}};
  try{const reply=await storeAi(db,{guild_id:'guild',id:'interaction'},'user','Desligue o Pix');assert.equal(writes[0].status,'proposed');assert.equal(writes[0].payload.data.value,false);assert(reply.components[0].components.some(b=>b.label==='Aplicar proposta'));}finally{globalThis.Deno=oldDeno;globalThis.fetch=oldFetch;}
+});
+
+import {createPrivateTicketThread,threadMemberAccess,parentThreadOverwrite,isTicketChannel,ticketBotId} from '../supabase/functions/discord-interactions/ticket-channel.ts';
+test('ticket creation requests a private non-invitable thread under the support text channel',async()=>{
+ let call;const id='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';const parent={id:'parent',guild_id:'guild',type:0};
+ const request=async(path,method,body)=>{call={path,method,body};return {id:'thread',guild_id:'guild',parent_id:'parent',type:12,owner_id:ticketBotId,name:body.name};};
+ const channel=await createPrivateTicketThread(parent,'guild',id,'Dúvida',{username:'Soneca'},request);
+ assert.equal(call.path,'/channels/parent/threads');assert.equal(call.method,'POST');assert.equal(call.body.type,12);assert.equal(call.body.invitable,false);assert.equal(channel.name,'duvida-Soneca-aaaaaaaa');
+ for(const bad of [{...parent,guild_id:'other'},{...parent,type:5}])await assert.rejects(createPrivateTicketThread(bad,'guild',id,'Suporte',{},request),e=>e.code==='INVALID_TICKET_PARENT');
+ assert.equal(isTicketChannel({...channel,type:11},'guild',id,'thread'),false);assert.equal(isTicketChannel({...channel,owner_id:'other'},'guild',id,'thread'),false);assert.equal(isTicketChannel(channel,'guild',id,'wrong'),false);
+});
+test('private thread invitations preserve parent permissions and removal never edits the parent',async()=>{
+ const current={permission_overwrites:[{id:'user',type:1,allow:'16',deny:String(8n|(1n<<38n))}]};const access=parentThreadOverwrite(current,'user');
+ assert.equal(BigInt(access.allow)&16n,16n);assert.equal(BigInt(access.allow)&8n,0n);assert.equal(BigInt(access.deny)&8n,8n);assert.equal(BigInt(access.deny)&(1n<<38n),0n);
+ const calls=[];const send=async(path,method='GET',body)=>{calls.push({path,method,body});return {id:'parent',guild_id:'guild',type:0,...current};};
+ const channel={id:'thread',type:12,parent_id:'parent',guild_id:'guild',thread_metadata:{archived:true}};
+ await threadMemberAccess(channel,'user',false,send);assert.deepEqual(calls.map(c=>[c.path,c.method]),[['/channels/thread','PATCH'],['/channels/parent','GET'],['/channels/parent/permissions/user','PUT'],['/channels/thread/thread-members/user','PUT']]);
+ calls.length=0;await threadMemberAccess({...channel,thread_metadata:{archived:false}},'user',true,send);assert.deepEqual(calls.map(c=>[c.path,c.method]),[['/channels/thread/thread-members/user','DELETE']]);
+});
+test('closed private ticket thread can be deleted while public or foreign threads are protected',async()=>{
+ const {deleteClosedTicketChannel}=await import('../supabase/functions/discord-interactions/ticket-lifecycle.ts');
+ const id='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',view={ticket:{id,status:'closed'},discord:{closed_at:'date',channel_id:'thread',channel_state:'ready'}};
+ let removed=false;const channel={id:'thread',guild_id:'guild',type:12,owner_id:ticketBotId,parent_id:'parent',name:'suporte-aaaaaaaa'};
+ await deleteClosedTicketChannel(view,'guild',async(_,method='GET')=>{if(method==='DELETE')removed=true;return channel;});assert.equal(removed,true);
+ for(const bad of [{...channel,type:11},{...channel,owner_id:'another'},{...channel,name:'unrelated'}])await assert.rejects(deleteClosedTicketChannel(view,'guild',async()=>bad),e=>e.code==='PROTECTED_TICKET_CHANNEL');
 });
