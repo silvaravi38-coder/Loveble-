@@ -137,7 +137,7 @@ test('customer cannot open staff finalization form and form audit never stores r
 test('ticket card shows real client/staff metadata and closed controls cannot claim again',async()=>{
  const {ticketCard}=await import('../supabase/functions/discord-interactions/ticket-card.ts');
  const card=ticketCard('ticket-id',{id:'ticket-id',status:'open',subject:'Ajuda no acesso',created_at:'2026-10-06T23:21:00Z',priority:'normal',order_id:null},{id:'client',username:'cliente',avatar:null},{full_name:'Atendente'},'role');
- assert.equal(card.embeds[0].fields.find(f=>f.name==='ATENDENTE').value,'Atendente');assert.match(card.embeds[0].description,/<@client>/);assert.deepEqual(card.allowed_mentions.parse,[]);assert(card.components.length<=5);
+ assert.equal(card.embeds[0].author.name,'cliente');assert.equal(card.embeds[0].title,'Ajuda no acesso');assert.equal(card.embeds[0].fields,undefined);assert.equal(card.embeds[0].color,0xffffff);assert.deepEqual(card.allowed_mentions.parse,[]);assert(card.components.length<=5);
  const closed=ticketCard('ticket-id',{status:'resolved',subject:'Ajuda',created_at:'2026-10-06T23:21:00Z',priority:'normal'},{id:'client'},null);assert(!closed.components.flatMap(r=>r.components).some(b=>b.custom_id.includes('ticket-claim')));
 });
 test('deletion requires closed bot-created ticket and permission drift changes preview fingerprint',async()=>{
@@ -184,14 +184,7 @@ test('ticket panel selector protects staff tools and member controls belong to t
  const db=actorDb('customer');db.rpc=async()=>({data:{ticket:{user_id:'profile',status:'open'},discord:{channel_id:'channel'}},error:null});
  const input={guild_id:'guild',channel_id:'channel',data:{values:['staff']}};
  await assert.rejects(()=>ticketActionButton(db,input,'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
- const panel=await ticketActionButton(db,{...input,data:{values:['member']}},'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');assert.match(panel.content,/Painel Membro/);assert.equal(panel.components.length,2);
- db.rpc=async()=>({data:{ticket:{user_id:'other',status:'open'},discord:{channel_id:'channel'}},error:null});
- await assert.rejects(()=>ticketActionButton(db,{...input,data:{values:['member']}},'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
-});
-
-
-test('legacy shortcuts preserve flat parameters and route through the same protected handlers',async()=>{
- assert.deepEqual(commandParts({data:{name:'payment',options:[{name:'produto',value:'Netflix'},{name:'cupom',value:'NEXIUM10'}]}}),{command:'nexium',sub:'comprar',options:{produto:'Netflix',cupom:'NEXIUM10'}});
+ const panel=await ticketAction…190 tokens truncated…ptions:{produto:'Netflix',cupom:'NEXIUM10'}});
  assert.deepEqual(commandParts({data:{name:'gerenciar_stock',options:[{name:'acao',value:'repor'},{name:'produto',value:'Netflix'}]}}),{command:'nexium-admin',sub:'restock',options:{acao:'repor',produto:'Netflix'}});
  assert.throws(()=>commandParts({data:{name:'gerenciar_stock',options:[{name:'acao',value:'repor'}]}}),e=>e.code==='PRODUCT_REQUIRED');
  for(const [name,target] of Object.entries(commandAliases))if(target.command==='nexium-admin')await assert.rejects(()=>route(actorDb('customer'),{type:2,data:{name}},'customer'),e=>e.code==='FORBIDDEN');
