@@ -151,3 +151,5 @@ Removida instrução que fazia o modelo expor títulos de resposta sugerida/envi
 
 ### Identidade visual do bot (2026-10-08 UTC)
 Tema compartilhado com azul de destaque, banner de atendimento existente e status verde/cinza. Painel público mantém setores, emojis locais e horários definidos; central administrativa usa seções Vendas/Atendimento/Comunidade; cartões de tickets apresentam status, atendente e prioridade em campos compactos. Controles e IDs permanecem compatíveis. Job privado support_visuals exige perfil admin vinculado, sincroniza painéis existentes com locks e atualiza no máximo 25 cartões abertos, reportando falhas por item. Backend estrito e 89 testes aprovados; interactions v37 e executor v42.
+
+Sincronização visual ao vivo concluída: 1 painel público e 2 cartões de tickets abertos atualizados, sem erros e sem mensagens duplicadas. Migração discord_support_visual_dispatch adiciona somente support_visuals à whitelist de sync, mantendo autenticação de administrador, capability de uso único e acesso service_role. Advisors revisados: nenhum alerta da função alterada; avisos existentes de funções/ tabelas anteriores mantidos fora do escopo.
