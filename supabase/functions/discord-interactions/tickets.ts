@@ -80,7 +80,7 @@ export async function actTicket(db:SupabaseClient,input:any,userId:string,action
  if(action==='message'&&channelId)await discord(`/channels/${channelId}/messages`,'POST',{content:`${safeText(actor.full_name,100)}: ${safeText(options.text,1800)}`,allowed_mentions:{parse:[]}});
  if(action==='message'&&actor.role!=='admin'&&actor.role!=='support'){try{await ticketAi(db,userId,input.guild_id,id,'reply');}catch{ /* Disabled, paused or provider failure never prevents staff support. */ }}
  if(['claim','transfer','priority'].includes(action)){try{await refreshTicketCard(db,result);}catch{/* Ticket state remains authoritative; do not repeat a completed action for a card failure. */}}
- if(action==='claim'){try{const summary=await ticketAi(db,userId,input.guild_id,id,'summary');return {...summary,content:'Atendimento assumido. IA automática pausada.\n'+summary.content};}catch{ /* Claim succeeds even when AI is unavailable. */ }}
+ if(action==='claim')return privateMessage(`Ticket assumido por **${safeText(input.member?.nick||input.member?.user?.global_name||input.member?.user?.username||actor.full_name||'Atendente',100)}**.`);
  if(action==='add_member')await discord(`/channels/${channelId}/permissions/${options.target}`,'PUT',{type:1,allow:'117760',deny:'0'});
  if(action==='remove_member')await discord(`/channels/${channelId}/permissions/${options.target}`,'DELETE');
  const afterDelivery=(action==='close'||action==='cancel')&&channelId?async()=>{
