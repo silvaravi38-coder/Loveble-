@@ -184,7 +184,14 @@ test('ticket panel selector protects staff tools and member controls belong to t
  const db=actorDb('customer');db.rpc=async()=>({data:{ticket:{user_id:'profile',status:'open'},discord:{channel_id:'channel'}},error:null});
  const input={guild_id:'guild',channel_id:'channel',data:{values:['staff']}};
  await assert.rejects(()=>ticketActionButton(db,input,'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
- const panel=await ticketAction…190 tokens truncated…ptions:{produto:'Netflix',cupom:'NEXIUM10'}});
+ const panel=await ticketActionButton(db,{...input,data:{values:['member']}},'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');assert.match(panel.content,/Painel Membro/);assert.equal(panel.components.length,2);
+ db.rpc=async()=>({data:{ticket:{user_id:'other',status:'open'},discord:{channel_id:'channel'}},error:null});
+ await assert.rejects(()=>ticketActionButton(db,{...input,data:{values:['member']}},'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
+});
+
+
+test('legacy shortcuts preserve flat parameters and route through the same protected handlers',async()=>{
+ assert.deepEqual(commandParts({data:{name:'payment',options:[{name:'produto',value:'Netflix'},{name:'cupom',value:'NEXIUM10'}]}}),{command:'nexium',sub:'comprar',options:{produto:'Netflix',cupom:'NEXIUM10'}});
  assert.deepEqual(commandParts({data:{name:'gerenciar_stock',options:[{name:'acao',value:'repor'},{name:'produto',value:'Netflix'}]}}),{command:'nexium-admin',sub:'restock',options:{acao:'repor',produto:'Netflix'}});
  assert.throws(()=>commandParts({data:{name:'gerenciar_stock',options:[{name:'acao',value:'repor'}]}}),e=>e.code==='PRODUCT_REQUIRED');
  for(const [name,target] of Object.entries(commandAliases))if(target.command==='nexium-admin')await assert.rejects(()=>route(actorDb('customer'),{type:2,data:{name}},'customer'),e=>e.code==='FORBIDDEN');
