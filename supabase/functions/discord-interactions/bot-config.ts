@@ -1,3 +1,4 @@
+import {nexiumBrand} from './brand.ts';
 import {paymentConfigStatus} from './payment-config.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {actorFor,BotError,checked,row,button,linkButton,safeText,snowflake} from './api.ts';
@@ -20,9 +21,9 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
  let title='Central de Controle',description='',components:any[]=[];
  const call=(label:string,action:string,option='')=>button(label,prefix+'run:'+action+(option?':'+option:''),2);
  if(page==='home'){
-  title=`Olá, ${name} — Central de Controle`;
-  description=`**Nexium Store**\n**Vendas Pix no Discord:** ${settings.pix_enabled?'Abertas':'Pausadas'}\n**Cargo Cliente:** ${ref(settings.role_customer_id)}\n**Cargo Suporte:** ${ref(settings.role_support_id)}\n**Categoria de tickets:** ${ref(settings.category_support_id,'channel')}\n\nSelecione uma área abaixo para gerenciar a loja. Alterações se aplicam a este servidor.`;
-  components=[row([toggle('Vendas Pix', 'pix_enabled',!!settings.pix_enabled),nav('Marketplace','marketplace'),nav('Atendimento','atendimento')]),row([nav('Definições','definicoes'),nav('Automações','automacoes'),nav('Moderação','moderacao')]),row([nav('Rendimento','rendimento'),nav('Tools e backups','tools'),nav('Permissões','permissoes')]),row([nav('Personalização','personalizacao'),nav('Conexão e nuvem','oauth')])];
+  title=`Central Nexium • Olá, ${name}`;
+  description=`> Tudo o que você precisa para cuidar da sua loja.\n\n**VENDAS**\nVendas Pix: **${settings.pix_enabled?'Abertas':'Pausadas'}**\n\n**ATENDIMENTO**\nEquipe: ${ref(settings.role_support_id)}\nTickets: ${ref(settings.category_support_id,'channel')}\n\n**COMUNIDADE**\nCargo de cliente: ${ref(settings.role_customer_id)}\n\nEscolha uma área abaixo para continuar.`;
+  components=[row([toggle('Vendas Pix', 'pix_enabled',!!settings.pix_enabled),nav('Marketplace','marketplace'),nav('Atendimento','atendimento')]),row([nav('Definições','definicoes'),nav('Automações','automacoes'),nav('Moderação','moderacao')]),row([nav('Rendimento','rendimento'),nav('Ferramentas e backups','tools'),nav('Permissões','permissoes')]),row([nav('Personalização','personalizacao'),nav('Conexão e nuvem','oauth')])];
  }else if(page==='marketplace'){
   title='Gerenciar Marketplace';description='Consulte estoque e painéis, ou atualize o painel de solicitar produtos.\n**Repor estoque:** /gerenciar_stock acao:repor produto:nome\n**Criar cupom:** /cupom\n**Editar produtos e variantes:** administração da loja.';
   components=[row([call('Consultar estoque','estoque'),call('Listar painéis','paineis'),call('Painel de estoque','painel-estoque')]),row([linkButton('Produtos e variantes','https://nexium-store.vercel.app/admin')]),back()];
@@ -73,10 +74,10 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
   title='Rendimento';description='Receita de pedidos confirmados, custos e taxas registrados. Pedidos sem conciliação são identificados no relatório.';
   components=[row([call('Hoje','financeiro','today'),call('Últimos 7 dias','financeiro','7days'),call('Últimos 30 dias','financeiro','30days')]),row([call('Este mês','financeiro','month'),call('Total','financeiro','total')]),row([call('Ranking de produtos','ranking-produtos'),call('Relatório de suporte','suportes')]),back()];
  }else{
-  title='Tools e backups';description='Escanear e salvar backups da estrutura do servidor. O preview mostra as mudanças propostas. A aplicação continua pelo comando /nexium-admin aplicar com o ID do preview revisado.\nBackups incluem estrutura e permissões; mensagens não são incluídas.';
+  title='Ferramentas e backups';description='Escanear e salvar backups da estrutura do servidor. O preview mostra as mudanças propostas. A aplicação continua pelo comando /nexium-admin aplicar com o ID do preview revisado.\nBackups incluem estrutura e permissões; mensagens não são incluídas.';
   components=[row([nav('Divulgação','divulgacao'),call('Checkers da loja','diagnostico')]),row([call('Escanear servidor','scan'),call('Backup estrutural','backup'),call('Preview organizador','preview')]),row([linkButton('Admin e logs','https://nexium-store.vercel.app/admin')]),back()];
  }
- return {...privateMessage(notice),embeds:[{title,description,color:0xe3e5e8,footer:{text:'Nexium Store • Controle administrativo'},timestamp:new Date().toISOString()}],components};
+ return {...privateMessage(notice),embeds:[{author:{name:'NEXIUM STORE • ADMINISTRAÇÃO'},title,description,color:nexiumBrand.accent,footer:{text:'Nexium Store • Central privada de controle'},timestamp:new Date().toISOString()}],components};
 }
 export async function botConfigAction(db:SupabaseClient,input:any,user:string,execute:(sub:string,options:Record<string,any>)=>Promise<any>){
  const actor=await actorFor(db,user);if(actor.role!=='admin')throw new BotError('FORBIDDEN');

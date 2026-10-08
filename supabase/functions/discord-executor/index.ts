@@ -1,5 +1,6 @@
 import {productRequestPanel} from '../discord-interactions/product-requests.ts';
 import {syncStreaming} from './streaming.ts';
+import {syncSupportVisuals} from './support-visuals.ts';
 import {syncInformationMessage} from './information.ts';
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { discordGet, ExecutorError } from './discord.ts';
@@ -83,8 +84,8 @@ Deno.serve(async (req: Request) => {
     checked(await db.from('discord_job_logs').insert({ job_id: jobId, level: 'info', code: 'STARTED', details: { action, strategy } }));
     let result: Record<string, unknown>;
     if (action === 'sync') {
-      if (!actorId || runtimeTarget !== 'streaming_catalog') throw new ExecutorError('ACTION_NOT_IMPLEMENTED',409);
-      result = await syncStreaming(db,config.guild_id,actorId);
+      if (!actorId || !['streaming_catalog','support_visuals'].includes(runtimeTarget||'')) throw new ExecutorError('ACTION_NOT_IMPLEMENTED',409);
+      result = runtimeTarget==='support_visuals'?await syncSupportVisuals(db,config.guild_id,actorId):await syncStreaming(db,config.guild_id,actorId);
     } else if (action === 'publish') {
       if (!actorId || runtimeTarget !== 'runtime_connection') throw new ExecutorError('ACTION_NOT_IMPLEMENTED',409);
       const token = Deno.env.get('DISCORD_BOT_TOKEN');

@@ -147,3 +147,7 @@ Validation: live rejection verified; strict backend check and 86 Node tests pass
 
 ### Respostas ao cliente (2026-10-07)
 Removida instrução que fazia o modelo expor títulos de resposta sugerida/enviada. Reply e suggest produzem apenas a mensagem curta para o cliente; summary continua interno. Prompt inclui o endereço oficial da loja, restringe métodos de pagamento não confirmados e evita pedir pedido em dúvidas pré-compra. Histórico de respostas IA é omitido para não propagar templates anteriores. Limpeza defensiva remove cabeçalhos e notas de encaminhamento antes de salvar/enviar; testes cobrem preservação de preço/link e remoção das notas. Backend estrito e 89 testes aprovados; deploy interactions v36 e scheduler v16.
+
+
+### Identidade visual do bot (2026-10-08 UTC)
+Tema compartilhado com azul de destaque, banner de atendimento existente e status verde/cinza. Painel público mantém setores, emojis locais e horários definidos; central administrativa usa seções Vendas/Atendimento/Comunidade; cartões de tickets apresentam status, atendente e prioridade em campos compactos. Controles e IDs permanecem compatíveis. Job privado support_visuals exige perfil admin vinculado, sincroniza painéis existentes com locks e atualiza no máximo 25 cartões abertos, reportando falhas por item. Backend estrito e 89 testes aprovados; interactions v37 e executor v42.

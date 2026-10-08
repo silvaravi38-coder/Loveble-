@@ -137,7 +137,7 @@ test('customer cannot open staff finalization form and form audit never stores r
 test('ticket card shows real client/staff metadata and closed controls cannot claim again',async()=>{
  const {ticketCard}=await import('../supabase/functions/discord-interactions/ticket-card.ts');
  const card=ticketCard('ticket-id',{id:'ticket-id',status:'open',subject:'Ajuda no acesso',created_at:'2026-10-06T23:21:00Z',priority:'normal',order_id:null},{id:'client',username:'cliente',avatar:null},{full_name:'Atendente'},'role');
- assert.match(card.embeds[0].fields.find(f=>f.name==='ℹ️ | Informações').value,/Assumido:.*Atendente/);assert.match(card.embeds[0].description,/<@client>/);assert.deepEqual(card.allowed_mentions.parse,[]);assert(card.components.length<=5);
+ assert.equal(card.embeds[0].fields.find(f=>f.name==='ATENDENTE').value,'Atendente');assert.match(card.embeds[0].description,/<@client>/);assert.deepEqual(card.allowed_mentions.parse,[]);assert(card.components.length<=5);
  const closed=ticketCard('ticket-id',{status:'resolved',subject:'Ajuda',created_at:'2026-10-06T23:21:00Z',priority:'normal'},{id:'client'},null);assert(!closed.components.flatMap(r=>r.components).some(b=>b.custom_id.includes('ticket-claim')));
 });
 test('deletion requires closed bot-created ticket and permission drift changes preview fingerprint',async()=>{

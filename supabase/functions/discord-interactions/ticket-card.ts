@@ -1,3 +1,4 @@
+import {nexiumBrand} from './brand.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {checked,discord,safeText} from './api.ts';
 import {ticketControls} from './ticket-ui.ts';
@@ -9,34 +10,29 @@ export function ticketCard(id:string,ticket:any,owner:any,assigned:any,staffRole
  const avatar=owner.avatar&&/^[a-f0-9_]+$/i.test(owner.avatar)?`https://cdn.discordapp.com/avatars/${owner.id}/${owner.avatar}.png?size=128`:undefined;
  const opened=Math.floor(Date.parse(ticket.created_at)/1000);
  const ownerLabel=owner.id?`<@${owner.id}>`:safeText(owner.username||owner.name||'Cliente',100);
- const assignedLabel=assigned?safeText(assigned.username||assigned.full_name,100):'Ninguém';
+ const assignedLabel=assigned?safeText(assigned.username||assigned.full_name,100):'Aguardando equipe';
  return {
   content:null,
   allowed_mentions:{parse:[]},
   embeds:[{
-   image:{url:'https://flcqndjlzuhmxxahjudj.supabase.co/storage/v1/object/public/product-images/discord/nexium-atendimento.png'},
+   image:{url:nexiumBrand.banner},
    author:{name:safeText(owner.username||owner.name||'Cliente',100),...(avatar?{icon_url:avatar}:{})},
-   title:closed?'🔒 | Atendimento encerrado':safeText(ticket.subject?.split(':')[0]||'Suporte',100),
+   title:closed?'🔒 | Atendimento encerrado':'Atendimento • '+safeText(ticket.subject?.split(':')[0]||'Suporte',100),
    description:closed
     ?`O atendimento de ${ownerLabel} foi encerrado. O histórico continua registrado na Nexium Store.`
-    :`✌️ Olá, ${ownerLabel}. Em que podemos ajudar?\n<:info:1555363211207905280> Por favor, aguarde enquanto um membro da nossa equipe venha lhe atender.\n\nExplique o que precisa neste canal.`,
-   color:closed?0x747f8d:0xe3e5e8,
+    :`Olá, ${ownerLabel}! Bem-vindo ao seu atendimento privado.\n\nConte o que você precisa e acompanhe a conversa por aqui. A equipe e o atendimento automático podem ajudar neste canal.`,
+   color:closed?nexiumBrand.muted:ticket.assigned_to?nexiumBrand.success:nexiumBrand.accent,
    ...(avatar?{thumbnail:{url:avatar}}:{}),
    fields:[
-    {name:'ℹ️ | Informações',value:[
-      `🔧 **Setor:** ${safeText(ticket.subject?.split(':')[0]||'Suporte',100)}`,
-      `📅 **Data:** <t:${opened}:F>`,
-      `👤 **Cliente:** ${ownerLabel}`,
-      `👥 **Assumido:** ${assignedLabel}`,
-      staffRole?`🛠️ **Suporte:** <@&${staffRole}>`:'🛠️ **Suporte:** Equipe Nexium',
-      `📊 **Status:** ${closed?(ticket.status==='resolved'?'Resolvido':'Encerrado'):(ticket.assigned_to?'Em atendimento':'Aguardando atendimento')}`,
-      `⚡ **Prioridade:** ${priorityLabel[ticket.priority]||safeText(ticket.priority||'Normal',30)}`
-    ].join('\n')},
+    {name:'STATUS',value:closed?(ticket.status==='resolved'?'Resolvido':'Encerrado'):(ticket.assigned_to?'Em atendimento':'Aguardando atendimento'),inline:true},
+    {name:'ATENDENTE',value:assignedLabel,inline:true},
+    {name:'PRIORIDADE',value:priorityLabel[ticket.priority]||safeText(ticket.priority||'Normal',30),inline:true},
+    {name:'DETALHES',value:[`**Cliente:** ${ownerLabel}`,`**Aberto:** <t:${opened}:f>`,staffRole?`**Equipe:** <@&${staffRole}>`:'**Equipe:** Suporte Nexium'].join('\n')},
     {name:'💬 | Assunto',value:safeText(ticket.subject||'Atendimento',500)},
     ...(ticket.order_id?[{name:'📦 | Pedido relacionado',value:`\`${ticket.order_id}\``}]:[]),
     {name:'📌 | Avisos',value:closed
       ?'⭐ Você pode avaliar o atendimento abaixo. O transcript permanece disponível para consulta.'
-      :'• Aguarde um atendente assumir o ticket.\n• Não marque a equipe repetidamente.\n• Não envie senhas, códigos de acesso ou dados bancários.\n• Se for sobre uma compra, tenha o número do pedido em mãos.'}
+      :'• Se a dúvida for sobre uma compra, informe o número do pedido.\n• Proteja seus dados: não envie senhas ou códigos de acesso.\n• Use o menu abaixo para acessar suas opções.'}
    ],
    footer:{text:`Nexium Store • Ticket #${id.slice(0,8)}`},
    timestamp:ticket.created_at
