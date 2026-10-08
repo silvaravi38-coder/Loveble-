@@ -83,12 +83,11 @@ export async function actTicket(db:SupabaseClient,input:any,userId:string,action
  if(action==='claim'){try{const summary=await ticketAi(db,userId,input.guild_id,id,'summary');return {...summary,content:'Atendimento assumido. IA automática pausada.\n'+summary.content};}catch{ /* Claim succeeds even when AI is unavailable. */ }}
  if(action==='add_member')await discord(`/channels/${channelId}/permissions/${options.target}`,'PUT',{type:1,allow:'117760',deny:'0'});
  if(action==='remove_member')await discord(`/channels/${channelId}/permissions/${options.target}`,'DELETE');
- if((action==='close'||action==='cancel')&&channelId){
+ const afterDelivery=(action==='close'||action==='cancel')&&channelId?async()=>{
   await deleteClosedTicketChannel(result,input.guild_id);
   checked(await db.from('discord_tickets').update({deleted_at:new Date().toISOString()}).eq('ticket_id',id));
   await audit(db,input.guild_id,actor.id,'ticket_channel_deleted',id,{channel_id:channelId,automatic:true});
-
- }
+ }:undefined;
  if(action==='transcript'){
   if(channelId&&!view.discord.deleted_at)await captureTranscript(db,id,channelId,actor.id);
   const transcript=checked(await db.from('discord_ticket_transcripts').select('messages,complete').eq('ticket_id',id).maybeSingle());
@@ -98,8 +97,8 @@ export async function actTicket(db:SupabaseClient,input:any,userId:string,action
  }
  const minutes=Math.max(0,Math.round(((result.discord.closed_at?Date.parse(result.discord.closed_at):Date.now())-Date.parse(result.ticket.created_at))/60000));
  const priority:Record<string,string>={low:'Baixa',normal:'Normal',high:'Alta',urgent:'Urgente'};
- if(action==='close')return privateMessage(`✅ **Atendimento finalizado!**\n\nSeu ticket foi encerrado com sucesso.\n📌 **Status:** ${options.outcome==='resolved'?'Resolvido':'Encerrado'}\n⏱️ **Duração:** ${minutes} min\n🗑️ O canal foi apagado. O histórico ficou salvo na Nexium.`);
- if(action==='cancel')return privateMessage('🚪 **Ticket encerrado.**\n\nO atendimento foi cancelado e o histórico foi salvo.');
+ if(action==='close')return {...privateMessage(`✅ **Atendimento finalizado!**\n\nSeu ticket foi encerrado com sucesso.\n📌 **Status:** ${options.outcome==='resolved'?'Resolvido':'Encerrado'}\n⏱️ **Duração:** ${minutes} min\n🗑️ O histórico ficou salvo na Nexium. O canal será apagado após esta confirmação.`),afterDelivery};
+ if(action==='cancel')return {...privateMessage('🚪 **Ticket encerrado.**\n\nO atendimento foi cancelado e o histórico foi salvo. O canal será apagado após esta confirmação.'),afterDelivery};
  if(action==='priority')return privateMessage(`⚡ **Prioridade atualizada:** ${priority[result.ticket.priority]||'Normal'}.`);
  if(action==='transfer')return privateMessage('🔄 **Atendimento transferido com sucesso.**');
  if(action==='add_member')return privateMessage('➕ **Membro adicionado ao atendimento.**');

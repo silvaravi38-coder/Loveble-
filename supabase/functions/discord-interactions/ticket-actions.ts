@@ -53,6 +53,7 @@ async function confirmDelete(db:SupabaseClient,input:any,user:string,id:string){
  const preview=checked(await db.from('discord_ticket_delete_previews').select('*').eq('id',id).eq('guild_id',input.guild_id).eq('channel_id',input.channel_id).eq('requested_by',actor.id).eq('status','pending').gt('expires_at',new Date().toISOString()).maybeSingle());if(!preview)throw new BotError('CONTROL_PREVIEW_EXPIRED');
  const view=await ticketRpc(db,user,input.guild_id,'view',preview.ticket_id),channel=await discord(`/channels/${preview.channel_id}`);requireDeletableTicket(view,channel,input.guild_id);
  if(channelFingerprint(channel)!==channelFingerprint(preview.channel_backup))throw new BotError('CHANNEL_CHANGED_REVIEW_REQUIRED');
+ return {...privateMessage('Exclusão confirmada. O canal será apagado após esta resposta. Histórico, avaliação e transcript permanecem salvos na Nexium.'),afterDelivery:async()=>{
  const claim=checked(await db.from('discord_ticket_delete_previews').update({status:'running'}).eq('id',id).eq('status','pending').gt('expires_at',new Date().toISOString()).select('id').maybeSingle());if(!claim)throw new BotError('CONTROL_PREVIEW_EXPIRED');
  let jobId:string|undefined,accepted=false;
  try{
@@ -66,6 +67,7 @@ async function confirmDelete(db:SupabaseClient,input:any,user:string,id:string){
   await audit(db,input.guild_id,actor.id,'ticket_channel_deleted',preview.ticket_id,{preview_id:id,channel_id:channel.id});
   checked(await db.from('discord_jobs').update({status:'succeeded',finished_at:new Date().toISOString(),result:{ticket_id:preview.ticket_id,channel_id:channel.id,preview_id:id}}).eq('id',jobId));
   checked(await db.from('discord_job_logs').insert({job_id:jobId,level:'info',code:'TICKET_CHANNEL_DELETED'}));
-  return privateMessage('Canal do ticket excluído. Histórico, avaliação e transcript permanecem no backend da Nexium.');
+
  }catch(error){const code=error instanceof BotError?error.code:'DATABASE_ERROR';await db.from('discord_ticket_delete_previews').update({status:accepted||code==='MUTATION_UNCERTAIN'?'uncertain':'failed',finished_at:new Date().toISOString()}).eq('id',id);if(jobId){await db.from('discord_jobs').update({status:'failed',error_code:code,error_message:code,finished_at:new Date().toISOString()}).eq('id',jobId);await db.from('discord_job_logs').insert({job_id:jobId,level:'error',code});}throw error;}
+ }};
 }

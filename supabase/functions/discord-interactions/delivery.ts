@@ -1,6 +1,6 @@
 export type PrivateFile={name:string;content:Uint8Array|string;type:string};
 export async function deliverResponse(url:string,message:any,send:typeof fetch=fetch) {
- const {files,...payload}=message;
+ const {files,afterDelivery,...payload}=message;
  if(!files?.length)return send(url,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(8000)});
  const form=new FormData();payload.attachments=files.map((file:PrivateFile,id:number)=>({id,filename:file.name}));
  form.set('payload_json',JSON.stringify(payload));
@@ -13,4 +13,12 @@ export function qrAttachment(value:string):PrivateFile|null {
  try{const bytes=Uint8Array.from(atob(raw),c=>c.charCodeAt(0));
  const signature=[137,80,78,71,13,10,26,10];if(!signature.every((b,i)=>bytes[i]===b))return null;
  return {name:'pix.png',content:bytes,type:'image/png'};}catch{return null;}
+}
+
+// Channel cleanup must run only after Discord accepts the confirmation.
+export async function deliverAndComplete(url:string,message:any,send:typeof fetch=fetch){
+ const response=await deliverResponse(url,message,send);
+ if(!response.ok)return {delivered:false,cleanupFailed:false};
+ try{await message.afterDelivery?.();return {delivered:true,cleanupFailed:false};}
+ catch{return {delivered:true,cleanupFailed:true};}
 }

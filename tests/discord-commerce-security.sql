@@ -7,7 +7,7 @@ begin
  select id into staff from profiles where id<>admin and id<>customer order by created_at limit 1;
  if customer is null or staff is null then raise exception 'test requires existing customer fixtures'; end if;
  update profiles set role='support' where id=staff;
- insert into discord_account_links(profile_id,discord_user_id,discord_username) values(customer,'999999999999999991','test-customer'),(staff,'999999999999999992','test-staff');
+ insert into discord_account_links(profile_id,discord_user_id,discord_username) values(customer,'999999999999999991','test-customer'),(staff,'999999999999999992','test-staff') on conflict(profile_id) do update set discord_user_id=excluded.discord_user_id;
  report:=discord_finance_report(admin,'total');revenue_before:=(report->>'revenue')::numeric;
  report:=discord_finance_report(admin,'7days');before7:=(report->>'revenue')::numeric;boundary7:=(report->>'range_start')::timestamptz;
  report:=discord_finance_report(admin,'30days');before30:=(report->>'revenue')::numeric;boundary30:=(report->>'range_start')::timestamptz;

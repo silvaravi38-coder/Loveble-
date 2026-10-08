@@ -1,5 +1,6 @@
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {checked,discord} from './api.ts';
+import {paymentConfigStatus} from './payment-config.ts';
 import {privateMessage} from './security.ts';
 export async function storeDiagnostics(db:SupabaseClient,guild:string){
  const settings=checked(await db.from('discord_bot_settings').select('pix_enabled,role_customer_id,role_support_id,category_support_id,channel_logs_id').eq('guild_id',guild).maybeSingle());
@@ -11,7 +12,8 @@ export async function storeDiagnostics(db:SupabaseClient,guild:string){
  const missing=panels.filter(p=>!channels.some((c:any)=>c.id===p.channel_id)),pending=panels.filter(p=>p.sync_status!=='synced'||!p.message_id);
  checks.push(`Painéis ativos: ${panels.length} • canais ausentes: ${missing.length} • sem sincronização confirmada: ${pending.length}`);
  checks.push(`Pix Discord: ${settings?.pix_enabled?'ligado':'desligado'}`);
- checks.push(`Credenciais Pix: ${Deno.env.get('TURBOFYPAY_CLIENT_ID')&&Deno.env.get('TURBOFYPAY_CLIENT_SECRET')?'configuradas':'pendentes'}`);
- checks.push(`Chave de IA: ${Deno.env.get('AI_GATEWAY_API_KEY')?'configurada':'pendente'}`);
+ const payment=await paymentConfigStatus(db,guild);
+ checks.push(`Credenciais Pix: ${payment.configured?'configuradas':'pendentes'}`);
+ checks.push(`Chave de IA: ${Deno.env.get('GROQ_API_KEY')?'Groq configurada':Deno.env.get('AI_GATEWAY_API_KEY')?'Gateway configurada':'pendente'}`);
  return {...privateMessage(''),embeds:[{title:'Checkers da Nexium',description:checks.join('\n')+'\n\nDiagnóstico da configuração da loja. Não testa credenciais de clientes nem faz cobranças. A presença de uma chave não confirma a disponibilidade do provedor.',color:0xe3e5e8,footer:{text:'Nexium Store • Nenhuma configuração alterada'}}]};
 }

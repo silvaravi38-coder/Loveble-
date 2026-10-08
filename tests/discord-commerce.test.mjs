@@ -389,3 +389,36 @@ test('AI mode buttons explicitly configure existing suggestion and ticket-messag
  await botConfigAction(actorDb('admin'),{guild_id:'guild',data:{custom_id:'nexium:botconfig:run:ia:automatic'}},'user',execute);
  assert.deepEqual(calls,[{sub:'ia',o:{modo:'automatic'}}]);
 });
+
+import {deliverAndComplete} from '../supabase/functions/discord-interactions/delivery.ts';
+import {parseStoreAIReply} from '../supabase/functions/discord-interactions/store-ai.ts';
+import {validateDiscordPayload} from '../supabase/functions/discord-interactions/function-audit.ts';
+test('ticket cleanup runs after accepted confirmation and never after rejected delivery',async()=>{
+ const steps=[];const message={content:'Encerrado',afterDelivery:async()=>steps.push('delete')};
+ const result=await deliverAndComplete('https://example.test',message,async(_,init)=>{assert.deepEqual(JSON.parse(init.body),{content:'Encerrado'});steps.push('confirm');return new Response('{}');});
+ assert.deepEqual(steps,['confirm','delete']);assert.deepEqual(result,{delivered:true,cleanupFailed:false});
+ steps.length=0;await deliverAndComplete('https://example.test',message,async()=>new Response('{}',{status:403}));assert.equal(steps.length,0);
+ const failed=await deliverAndComplete('https://example.test',{content:'Encerrado',afterDelivery:async()=>{throw new Error('refused');}},async()=>new Response('{}'));
+ assert.deepEqual(failed,{delivered:true,cleanupFailed:true});
+ await assert.rejects(deliverAndComplete('https://example.test',message,async()=>{throw new Error('offline');}));assert.equal(steps.length,0);
+});
+test('store AI proposals require valid structure and forbid money transfer or permission actions',()=>{
+ assert.deepEqual(parseStoreAIReply('{"text":"Qual produto?","proposal":null}'),{text:'Qual produto?',proposal:null});
+ assert.equal(parseStoreAIReply('```json\n{"text":"Revisar","proposal":{"kind":"config","field":"pix_enabled","value":false}}\n```').proposal.data.value,false);
+ for(const text of ['not json','{}','{"text":"Fiz","proposal":{"kind":"withdraw"}}','{"text":"Fiz","proposal":{"kind":"config","field":"role_support_id","value":true}}'])assert.throws(()=>parseStoreAIReply(text),e=>e.code==='INVALID_AI_PROPOSAL');
+});
+test('Discord validation catches oversized messages, invalid selects and embed limits',()=>{
+ assert.deepEqual(validateDiscordPayload({content:'Olá',components:[{type:1,components:[{type:2,label:'Ver',custom_id:'nexium:test',style:1}]}]}),[]);
+ assert.ok(validateDiscordPayload({content:'x'.repeat(2001)}).includes('CONTENT_LIMIT'));
+ assert.ok(validateDiscordPayload({components:[{type:1,components:[{type:3,options:[]}]}]}).includes('SELECT_LIMIT'));
+ assert.ok(validateDiscordPayload({embeds:[{fields:[{name:'Nome',value:'x'.repeat(1025)}]}]}).includes('EMBED_FIELD_LIMIT'));
+});
+
+import {storeAi} from '../supabase/functions/discord-interactions/store-ai.ts';
+test('administrative AI uses Groq and creates only a reviewed proposal, never a product or config mutation',async()=>{
+ const oldDeno=globalThis.Deno,oldFetch=globalThis.fetch;const writes=[];
+ globalThis.Deno={env:{get:name=>name==='GROQ_API_KEY'?'test-key':undefined}};
+ globalThis.fetch=async(url,init)=>{assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');assert.match(JSON.parse(init.body).messages[0].content,/Não execute ações/);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({text:'Revise a proposta.',proposal:{kind:'config',field:'pix_enabled',value:false}})}}]}));};
+ const db={rpc:async()=>({data:{max_tokens:800},error:null}),from(table){const q={select(){return q},eq(){return q},order(){return q},limit(){return q},update(value){assert.equal(table,'discord_store_operations');writes.push(value);return q},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{},error:null}),single:async()=>({data:table==='profiles'?{id:'admin',role:'admin'}:{id:'11111111-1111-4111-8111-111111111111'},error:null}),then(resolve){return Promise.resolve({data:[],error:null}).then(resolve)}};return q;}};
+ try{const reply=await storeAi(db,{guild_id:'guild',id:'interaction'},'user','Desligue o Pix');assert.equal(writes[0].status,'proposed');assert.equal(writes[0].payload.data.value,false);assert(reply.components[0].components.some(b=>b.label==='Aplicar proposta'));}finally{globalThis.Deno=oldDeno;globalThis.fetch=oldFetch;}
+});
