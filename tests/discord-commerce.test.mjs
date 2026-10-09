@@ -236,7 +236,7 @@ test('botconfig without arguments opens the dashboard without writing settings',
  const reads=[];let writes=0;
  const db={from(table){reads.push(table);return{select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{pix_enabled:true,role_customer_id:'999999999999999990'},error:null}),single:async()=>({data:{id:'admin',role:'admin',full_name:'Ariel'},error:null}),insert(){writes++;throw Error('must not write')},update(){writes++;throw Error('must not write')}}}};
  const result=await route(db,{type:2,guild_id:'guild',data:{name:'botconfig'}},'user');
- assert.match(result.embeds[0].title,/Ariel/);assert.match(result.embeds[0].description,/Abertas/);assert(result.components.flatMap(r=>r.components).some(c=>c.label==='Marketplace'));assert.equal(writes,0);assert(reads.includes('discord_bot_settings'));
+ assert.match(result.embeds[0].title,/Ariel/);assert(result.embeds[0].fields.some(f=>/Vendas Pix/.test(f.name)&&/Abertas/.test(f.value)));assert(result.components.flatMap(r=>r.components).some(c=>c.label==='Marketplace'));assert.equal(writes,0);assert(reads.includes('discord_bot_settings'));
 });
 
 test('every botconfig page fits Discord limits and private responses suppress mentions',async()=>{

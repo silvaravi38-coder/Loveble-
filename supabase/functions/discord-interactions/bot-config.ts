@@ -4,8 +4,9 @@ import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {actorFor,BotError,checked,row,button,linkButton,safeText,snowflake} from './api.ts';
 import {privateMessage} from './security.ts';
 const prefix='nexium:botconfig:';
-const back=()=>row([button('Voltar à central',prefix+'tab:home',2)]);
-const nav=(label:string,tab:string)=>button(label,prefix+'tab:'+tab,2);
+const back=()=>row([{...button('Voltar à central',prefix+'tab:home',2),emoji:{name:'↩️'}}]);
+const icons:Record<string,string>={home:'🏠',marketplace:'🛍️',atendimento:'🎧',definicoes:'⚙️',automacoes:'🔄',moderacao:'🛡️',rendimento:'📊',tools:'🧰',permissoes:'👥',pagamentos:'💳',cargos:'👤',canais:'📂',notificacoes:'🔔',ia:'🤖',divulgacao:'📣',personalizacao:'🎨',oauth:'☁️'};
+const nav=(label:string,tab:string)=>({...button(label,prefix+'tab:'+tab,['marketplace','atendimento'].includes(tab)?1:2),emoji:{name:icons[tab]||'⚙️'}});
 const fields='pix_enabled,role_customer_id,role_support_id,category_support_id,channel_logs_id,grant_customer_role_on_paid,dm_customer_on_paid,dm_customer_on_delivery';
 const settingOptions:Record<string,string>={pix_enabled:'pix',grant_customer_role_on_paid:'cargo_cliente_apos_pago',dm_customer_on_paid:'dm_pagamento',dm_customer_on_delivery:'dm_entrega',role_customer_id:'cliente',role_support_id:'suporte',category_support_id:'categoria_tickets',channel_logs_id:'logs'};
 const pages=new Set(['home','marketplace','atendimento','definicoes','automacoes','moderacao','rendimento','tools','permissoes','pagamentos','cargos','canais','notificacoes','ia','divulgacao','personalizacao','oauth']);
@@ -18,17 +19,22 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
  if(!pages.has(page))throw new BotError('UNSUPPORTED_ACTION');
  const settings=checked(await db.from('discord_bot_settings').select(fields).eq('guild_id',input.guild_id).maybeSingle())||{};
  const name=safeText(input.member?.nick||input.member?.user?.global_name||actor.full_name,80);
- let title='Central de Controle',description='',components:any[]=[];
+ let title='Central de Controle',description='',components:any[]=[],summary:any[]=[];
  const call=(label:string,action:string,option='')=>button(label,prefix+'run:'+action+(option?':'+option:''),2);
  if(page==='home'){
-  title=`Central Nexium • Olá, ${name}`;
-  description=`> Tudo o que você precisa para cuidar da sua loja.\n\n**VENDAS**\nVendas Pix: **${settings.pix_enabled?'Abertas':'Pausadas'}**\n\n**ATENDIMENTO**\nEquipe: ${ref(settings.role_support_id)}\nTickets: ${ref(settings.category_support_id,'channel')}\n\n**COMUNIDADE**\nCargo de cliente: ${ref(settings.role_customer_id)}\n\nEscolha uma área abaixo para continuar.`;
+  title=`Olá, ${name||'Administrador'}!`;
+  description='Bem-vindo à **Central de Controle da Nexium Store**.\nGerencie sua loja, acompanhe os resultados e cuide dos seus clientes.\n\n**O que deseja fazer agora?**\nEscolha uma área nos botões abaixo.';
+  summary=[
+   {name:'💳 Vendas Pix',value:settings.pix_enabled?'🟢 Abertas':'⏸️ Pausadas',inline:true},
+   {name:'🎧 Equipe de suporte',value:ref(settings.role_support_id),inline:true},
+   {name:'👤 Cargo de cliente',value:ref(settings.role_customer_id),inline:true},
+  ];
   components=[row([toggle('Vendas Pix', 'pix_enabled',!!settings.pix_enabled),nav('Marketplace','marketplace'),nav('Atendimento','atendimento')]),row([nav('Definições','definicoes'),nav('Automações','automacoes'),nav('Moderação','moderacao')]),row([nav('Rendimento','rendimento'),nav('Ferramentas e backups','tools'),nav('Permissões','permissoes')]),row([nav('Personalização','personalizacao'),nav('Conexão e nuvem','oauth')])];
  }else if(page==='marketplace'){
   title='Gerenciar Marketplace';description='Consulte estoque e painéis, ou atualize o painel de solicitar produtos.\n**Repor estoque:** /gerenciar_stock acao:repor produto:nome\n**Criar cupom:** /cupom\n**Editar produtos e variantes:** administração da loja.';
   components=[row([call('Consultar estoque','estoque'),call('Listar painéis','paineis'),call('Painel de estoque','painel-estoque')]),row([linkButton('Produtos e variantes','https://nexium-store.vercel.app/admin')]),back()];
  }else if(page==='atendimento'||page==='permissoes'){
-  title=page==='atendimento'?'Gerenciar Atendimento':'Gerenciar Permissões';description=`**Equipe de suporte:** ${ref(settings.role_support_id)}\n**Clientes:** ${ref(settings.role_customer_id)}\n**Tickets:** ${ref(settings.category_support_id,'channel')}\n\nSelecione os cargos e a categoria abaixo. As ações administrativas continuam exigindo perfil admin na loja. O cargo Discord sozinho não concede acesso administrativo.`;
+  title=page==='atendimento'?'Gerenciar Atendimento':'Gerenciar Permissões';description=`**Equipe de suporte:** ${ref(settings.role_support_id)}\n**Clientes:** ${ref(settings.role_customer_id)}\n**Categoria de suporte:** ${ref(settings.category_support_id,'channel')}\n\nNovos tickets abrem como conversas privadas dentro do canal do painel de atendimento.\n\nSelecione os cargos e a categoria abaixo. As ações administrativas continuam exigindo perfil admin na loja. O cargo Discord sozinho não concede acesso administrativo.`;
   components=[roleSelect('role_support_id','Escolher cargo de Suporte'),roleSelect('role_customer_id','Escolher cargo de Cliente'),channelSelect('category_support_id','Escolher categoria de tickets',[4]),row([call('Relatório da equipe','suportes')]),back()];
  }else if(page==='definicoes'){
   title='O que precisa configurar?';description='Gerencie pagamentos, cargos, canais e notificações. Escolha uma categoria para continuar.';
@@ -77,7 +83,9 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
   title='Ferramentas e backups';description='Escanear e salvar backups da estrutura do servidor. O preview mostra as mudanças propostas. A aplicação continua pelo comando /nexium-admin aplicar com o ID do preview revisado.\nBackups incluem estrutura e permissões; mensagens não são incluídas.';
   components=[row([nav('Divulgação','divulgacao'),call('Checkers da loja','diagnostico')]),row([call('Escanear servidor','scan'),call('Backup estrutural','backup'),call('Preview organizador','preview')]),row([linkButton('Admin e logs','https://nexium-store.vercel.app/admin')]),back()];
  }
- return {...privateMessage(notice),embeds:[{author:{name:'NEXIUM STORE • ADMINISTRAÇÃO'},title,description,color:nexiumBrand.accent,footer:{text:'Nexium Store • Central privada de controle'},timestamp:new Date().toISOString()}],components};
+ const userInfo=input.member?.user;
+ const avatar=snowflake(userInfo?.id)&&/^[a-f0-9_]+$/i.test(userInfo?.avatar||'')?`https://cdn.discordapp.com/avatars/${userInfo.id}/${userInfo.avatar}.png?size=128`:undefined;
+ return {...privateMessage(''),embeds:[{author:{name:'NEXIUM STORE • CENTRAL DE CONTROLE'},title:`${icons[page]||'⚙️'} ${title}`,description,...(summary.length||notice?{fields:[...summary,...(notice?[{name:'✅ Atualização concluída',value:safeText(notice,500),inline:false}]:[])]}:{}),...(page==='home'&&avatar?{thumbnail:{url:avatar}}:{}),color:notice?nexiumBrand.success:nexiumBrand.accent,footer:{text:'Nexium Store • Painel exclusivo da administração'},timestamp:new Date().toISOString()}],components};
 }
 export async function botConfigAction(db:SupabaseClient,input:any,user:string,execute:(sub:string,options:Record<string,any>)=>Promise<any>){
  const actor=await actorFor(db,user);if(actor.role!=='admin')throw new BotError('FORBIDDEN');
