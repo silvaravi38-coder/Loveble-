@@ -1,3 +1,5 @@
+import {publishPanel} from '../discord-interactions/catalog.ts';
+import {discord} from '../discord-interactions/api.ts';
 import {verifyPrivateThread} from '../discord-interactions/thread-diagnostic.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {runWorker} from './worker.ts';
@@ -15,13 +17,21 @@ Deno.serve(async(req:Request)=>{
  try{
   const body=await req.json().catch(()=>({}));
   // Private support diagnostic: replay only an unclaimed ticket owned by a linked administrator.
-  if(body.action==='verify_ai'||body.action==='verify_bot'||body.action==='verify_thread'){
+  if(body.action==='verify_ai'||body.action==='verify_bot'||body.action==='verify_thread'||body.action==='verify_manual'||body.action==='sync_sales'){
    if(!uuid(body.ticket_id))return json({error:'INVALID_ID'},400);
    const ticket=checked(await db.from('support_tickets').select('user_id,assigned_to,status').eq('id',body.ticket_id).single());
    const owner=checked(await db.from('profiles').select('role').eq('id',ticket.user_id).single());
    const map=checked(await db.from('discord_tickets').select('guild_id,channel_id,channel_state').eq('ticket_id',body.ticket_id).is('closed_at',null).single());
    const link=checked(await db.from('discord_account_links').select('discord_user_id').eq('profile_id',ticket.user_id).single());
    if(owner.role!=='admin'||ticket.assigned_to||!['open','in_progress'].includes(ticket.status)||map.channel_state!=='ready')return json({error:'FORBIDDEN'},403);
+   if(body.action==='sync_sales'){
+    const panels=checked(await db.from('discord_sales_panels').select('id,channel_id').eq('guild_id',map.guild_id).eq('active',true).eq('panel_kind','sales')) as any[];const results=[];
+    for(const p of panels){try{await publishPanel(db,map.guild_id,p.channel_id,ticket.user_id,p.id);results.push({id:p.id,ok:true});}catch(e){results.push({id:p.id,ok:false,code:e instanceof BotError?e.code:'SYNC_FAILED'});}}return json({results});
+   }
+   if(body.action==='verify_manual'){
+    const settings=checked(await db.from('discord_bot_settings').select('channel_logs_id,dm_customer_on_delivery').eq('guild_id',map.guild_id).single());const channel=await discord(`/channels/${settings.channel_logs_id}`);
+    return json({ok:channel.guild_id===map.guild_id&&channel.permission_overwrites?.some((o:any)=>o.id===map.guild_id&&(BigInt(o.deny||'0')&1024n)!==0n),channel_id:channel.id,customer_notification:settings.dm_customer_on_delivery,queue_functions_available:true});
+   }
    if(body.action==='verify_thread')return json(await verifyPrivateThread(db,map.guild_id,link.discord_user_id));
    if(body.action==='verify_bot')return json(await auditFunctions(db,map.guild_id,link.discord_user_id,map.channel_id,body.ticket_id));
    await ticketAi(db,link.discord_user_id,map.guild_id,body.ticket_id,'reply');return json({ok:true,verified_ai:true});

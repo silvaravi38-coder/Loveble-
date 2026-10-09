@@ -26,13 +26,6 @@ export async function fulfilPaid(db:SupabaseClient,orderId:string) {
  await fulfilProductDeliveries(db,orderId);
  const refreshed=checked(await db.from('orders').select('status').eq('id',orderId).single());ord.status=refreshed.status;
  const config=checked(await db.from('discord_bot_settings').select('*').eq('guild_id',request.guild_id).maybeSingle());
- if(config?.grant_customer_role_on_paid&&config.role_customer_id){
-  const roles=await discord(`/guilds/${request.guild_id}/roles`),member=await discord(`/guilds/${request.guild_id}/members/1557132199227031552`);
-  const target=roles.find((r:any)=>r.id===config.role_customer_id);
-  const highest=Math.max(0,...roles.filter((r:any)=>member.roles.includes(r.id)).map((r:any)=>r.position));
-  if(!target||target.managed||target.id===request.guild_id||target.position>=highest)throw new BotError('ROLE_HIERARCHY_BLOCKED');
-  await discord(`/guilds/${request.guild_id}/members/${request.discord_user_id}/roles/${target.id}`,'PUT');
- }
  const notifications:any[]=[];
  if(config?.dm_customer_on_paid)notifications.push({dedupe_key:`paid-dm:${orderId}`,guild_id:request.guild_id,kind:'dm',recipient_id:request.discord_user_id,content:`Nexium: pagamento confirmado do pedido #${orderId.slice(0,8).toUpperCase()}. Acompanhe o atendimento e a entrega na sua conta. https://nexium-store.vercel.app`});
  if(ord.status==='delivered'&&config?.dm_customer_on_delivery)notifications.push({dedupe_key:`delivery-dm:${orderId}`,guild_id:request.guild_id,kind:'dm',recipient_id:request.discord_user_id,content:`Nexium: entrega disponível do pedido #${orderId.slice(0,8).toUpperCase()}. Acesse sua conta protegida em https://nexium-store.vercel.app`});
@@ -40,6 +33,16 @@ export async function fulfilPaid(db:SupabaseClient,orderId:string) {
  if(config?.notify_sale_paid&&logChannel)notifications.push({dedupe_key:`paid-log:${orderId}`,guild_id:request.guild_id,kind:'log',channel_id:logChannel,content:`Nexium • Pedido #${orderId.slice(0,8).toUpperCase()} confirmado pelo provedor. Origem: Discord. Status: ${ord.status}.`});
  if(notifications.length)checked(await db.from('discord_bot_outbox').upsert(notifications,{onConflict:'dedupe_key',ignoreDuplicates:true}));
  if(ord.status==='delivered'){const processed=checked(await db.from('discord_audit_events').select('id').eq('action','delivery_notification_processed').eq('entity_id',orderId).limit(1));if(!processed.length)await audit(db,request.guild_id,ord.user_id,'delivery_notification_processed',orderId);}
+ // A role failure must not block payment/delivery notifications. The worker retries the role later.
+ try{
+ if(config?.grant_customer_role_on_paid&&config.role_customer_id){
+  const roles=await discord(`/guilds/${request.guild_id}/roles`),member=await discord(`/guilds/${request.guild_id}/members/1557132199227031552`);
+  const target=roles.find((r:any)=>r.id===config.role_customer_id);
+  const highest=Math.max(0,...roles.filter((r:any)=>member.roles.includes(r.id)).map((r:any)=>r.position));
+  if(!target||target.managed||target.id===request.guild_id||target.position>=highest)throw new BotError('ROLE_HIERARCHY_BLOCKED');
+  await discord(`/guilds/${request.guild_id}/members/${request.discord_user_id}/roles/${target.id}`,'PUT');
+ }
+ }catch(error){const priorFailure=checked(await db.from('discord_audit_events').select('id').eq('action','customer_role_failed').eq('entity_id',orderId).limit(1));if(!priorFailure.length)await audit(db,request.guild_id,ord.user_id,'customer_role_failed',orderId,{code:error instanceof BotError?error.code:'DISCORD_API_ERROR'});return;}
  // Delivery is persisted transactionally by settlement, and is available only in the customer's account.
  const prior=await db.from('discord_audit_events').select('id').eq('action','payment_fulfilled').eq('entity_id',orderId).limit(1);
  if(prior.error)throw new BotError('DATABASE_ERROR');

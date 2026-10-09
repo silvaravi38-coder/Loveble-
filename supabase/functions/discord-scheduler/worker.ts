@@ -17,6 +17,7 @@ export async function sendScheduled(db:SupabaseClient,record:any,send=discord){
 }
 export async function runWorker(db:SupabaseClient){
  const fulfilments=checked(await db.rpc('discord_pending_fulfilments')) as any[];for(const fulfilment of fulfilments){try{await fulfilPaid(db,fulfilment.order_id);}catch{ /* Payment stays confirmed; role/notification delivery can recover later. */ }}
+ const manualAlerts=checked(await db.rpc('discord_queue_manual_alerts'));
  const outbox=checked(await db.rpc('discord_claim_outbox')) as any[];for(const notification of outbox)await sendNotification(db,notification);
  const records=checked(await db.rpc('discord_claim_scheduled_messages')) as any[];for(const record of records)await sendScheduled(db,record);
  // Expired reservations are released only after the merchant API confirms expiry/cancellation.
@@ -28,5 +29,5 @@ export async function runWorker(db:SupabaseClient){
   try{const charge=await providerCharge(payment.provider_payment_id,db,request.order_id);const settled=checked(await db.rpc('discord_settle_payment',{p_payment_id:payment.provider_payment_id,p_charge:charge}));if(settled.paid)await fulfilPaid(db,request.order_id);reconciled++;}catch{ /* Keep reservation until provider truth is available. */ }
  }
  const ticketChats=await pollTicketChats(db);
- return {claimed_notifications:outbox.length,claimed_messages:records.length,reconciled_payments:reconciled,polled_tickets:ticketChats};
+ return {queued_manual_alerts:manualAlerts,claimed_notifications:outbox.length,claimed_messages:records.length,reconciled_payments:reconciled,polled_tickets:ticketChats};
 }
