@@ -3,7 +3,10 @@ import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {actorFor,productFor,BotError,checked,uuid,audit} from './api.ts';
 import {commandParts} from './router.ts';
 import {privateMessage} from './security.ts';
+import {nexiumBrand} from './brand.ts';
+import {safeText} from './api.ts';
 export async function restockModal(db:SupabaseClient,input:any,userId:string) {
+ if(input.type===3&&String(input.data?.custom_id).startsWith('nexium:stock:edit:')){const id=String(input.data.custom_id).split(':')[3];if(!uuid(id))throw new BotError('INVALID_ID');return restockModal(db,{...input,type:2,data:{name:'gerenciar_stock',options:[{name:'acao',value:'repor'},{name:'produto',value:id}]}},userId);}
  const {command,sub,options}=commandParts(input);if(input.type!==2||command!=='nexium-admin'||sub!=='restock')return null;
  const actor=await actorFor(db,userId);if(actor.role!=='admin')throw new BotError('FORBIDDEN');
  const product=await productFor(db,options.produto);
@@ -17,5 +20,5 @@ export async function saveRestock(db:SupabaseClient,input:any,userId:string){
  const product=await productFor(db,productId);const raw=input.data.components?.flatMap((r:any)=>r.components||[]).find((c:any)=>c.custom_id==='units')?.value;
  if(typeof raw!=='string'||raw.length>4000)throw new BotError('INVALID_STOCK');const units=restockUnits(raw);
  const result=await db.rpc('discord_restock',{p_discord_user_id:userId,p_guild_id:input.guild_id,p_product_id:product.id,p_units:units,p_interaction_id:input.id});if(result.error)throw new BotError(String(result.error.message).includes('DUPLICATE_STOCK')?'DUPLICATE_STOCK':'RESTOCK_FAILED');
- return privateMessage(`Estoque de ${product.name}: ${units.length} unidade(s) adicionada(s). As chaves não foram publicadas no canal nem nos registros de auditoria.`);
+ return {...privateMessage(''),embeds:[{title:'✅ Estoque atualizado',description:`**${safeText(product.name,100)}**\n${units.length} unidade(s) adicionada(s) com sucesso.`,color:nexiumBrand.success,footer:{text:'Nexium Store • Reposição concluída'}}],components:[]};
 }

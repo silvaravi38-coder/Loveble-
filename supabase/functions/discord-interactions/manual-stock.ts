@@ -1,6 +1,6 @@
+import {stockPanel} from './stock-ui.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
-import {actorFor,BotError,checked,uuid,safeText} from './api.ts';
-import {privateMessage} from './security.ts';
+import {actorFor,BotError,checked,uuid} from './api.ts';
 import {publishPanel} from './catalog.ts';
 export function manualQuantity(value:unknown){
  if(typeof value!=='string')throw new BotError('INVALID_MANUAL_QUANTITY');
@@ -17,5 +17,5 @@ export async function saveManualQuantity(db:SupabaseClient,input:any,user:string
  checked(await db.rpc('discord_set_manual_quantity',{p_user:user,p_guild:input.guild_id,p_product:product,p_quantity:quantity}));
  const panels=checked(await db.from('discord_sales_panels').select('id,channel_id').eq('guild_id',input.guild_id).eq('active',true).eq('panel_kind','sales').contains('product_ids',[product]).limit(10)) as any[];
  const pending=[];for(const p of panels){try{await publishPanel(db,input.guild_id,p.channel_id,actor.id,p.id);}catch{pending.push(p.id);}}
- return privateMessage(`Quantidade ${quantity===null?'removida':`definida: ${quantity}`}. Produto configurado com entrega manual.\nEssa quantidade é informativa e não diminui automaticamente; atualize-a neste formulário quando desejar.${pending.length?'\nPainéis que aguardam sincronização: '+pending.map(p=>safeText(p)).join(', '):'\nPainéis existentes atualizados.'}`);
+ return stockPanel(db,user,product,0,`Quantidade ${quantity===null?'removida':`definida: ${quantity}`}.${pending.length?' Alguns painéis aguardam sincronização.':' Painéis atualizados.'}`);
 }

@@ -1,3 +1,4 @@
+import {stockPanel,stockAction} from './stock-ui.ts';
 import {manualDeliveryAction} from './manual-delivery.ts';
 import {setupChecklist,setSalesChannel} from './store-tools.ts';
 import {storeAi,applyStoreProposal} from './store-ai.ts';
@@ -84,11 +85,7 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
   if(previous)checked(await db.from('discord_bot_settings').update(data).eq('id',previous.id));else checked(await db.from('discord_bot_settings').insert(data));
   await audit(db,input.guild_id,actor.id,'bot_configured',input.guild_id,data);return privateMessage('Configurações salvas. IDs validados no Discord.');
  }
- if(sub==='estoque'){
-  const products=o.produto?[await productFor(db,o.produto)]:checked(await db.from('products').select('id,name,automatic_delivery,manual_display_quantity').eq('active',true).order('name')) as any[];
-  const lines=[];for(const p of products){const count=await db.from('supplier_stock_items').select('id',{count:'exact',head:true}).eq('product_id',p.id).eq('status','available');if(count.error)throw new BotError('DATABASE_ERROR');lines.push(`${safeText(p.name,100)}: ${p.automatic_delivery?(count.count||0)+' disponível(is) • automático':(p.manual_display_quantity==null?'Quantidade não informada':p.manual_display_quantity+' informada(s)')+' • entrega manual'}`);}
-  return privateMessage(lines.join('\n')+'\nEntrega manual: /gerenciar_stock acao:manual produto:nome. Automática: /nexium-admin restock ou painel de fornecedor. Nenhuma chave de entrega é mostrada neste comando.');
- }
+ if(sub==='estoque')return stockPanel(db,userId,o.produto);
  if(sub==='cupom'){
   const code=String(o.codigo).trim().toUpperCase();if(!/^[A-Z0-9_-]{3,32}$/.test(code)||!Number.isFinite(o.desconto)||o.desconto<1||o.desconto>99||!Number.isInteger(o.limite)||o.limite<1)throw new BotError('INVALID_COUPON');
   const c=checked(await db.from('coupons').insert({code,discount_type:'percent',discount_value:o.desconto,discount_percent:o.desconto,max_uses:o.limite,active:true}).select('id').single());
@@ -108,6 +105,7 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
 export async function route(db:SupabaseClient,input:any,userId:string) {
  if(input.type===3){
   const parts=String(input.data.custom_id).split(':');
+  if(parts[1]==='stock')return stockAction(db,input,userId);
   if(['manual-delivery','manual-delivery-confirm'].includes(parts[1]))return manualDeliveryAction(db,input,userId,parts[2],parts[1]==='manual-delivery-confirm');
   if(parts[1]==='store'){if(parts[2]==='checklist')return setupChecklist(db,input,userId);if(parts[2]==='sales-channel')return setSalesChannel(db,input,userId);if(['ai-apply','ai-discard'].includes(parts[2]))return applyStoreProposal(db,input,userId,parts[3],parts[2]==='ai-discard');throw new BotError('UNSUPPORTED_ACTION');}
   if(String(input.data.custom_id).startsWith('nexium:botconfig:'))return botConfigAction(db,input,userId,(sub,o)=>admin(db,input,userId,sub,o));
