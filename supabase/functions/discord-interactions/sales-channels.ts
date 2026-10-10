@@ -2,13 +2,11 @@ import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,discord,audit,safeText} from './api.ts';
 import {privateMessage} from './security.ts';
 import {publishPanel} from './catalog.ts';
+import {salesChannelPlan} from './sales-channel-names.ts';
+export {productChannelName} from './sales-channel-names.ts';
 
 const categoryName='🛍️・nexium-vendas';
 export const productChannelTopic=(productId:string)=>`Nexium Store product ${productId}`;
-export function productChannelName(name:string,productId:string){
- const base=name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,85)||'produto';
- return `${base}-${productId.replace(/-/g,'').slice(-4)}`.slice(0,100);
-}
 
 /** Creates one public, read-only sales channel per active site product and syncs its live Discord purchase card. */
 export async function createSalesChannels(db:SupabaseClient,guild:string,actorId:string,request:typeof discord=discord,publish:typeof publishPanel=publishPanel){
@@ -33,10 +31,16 @@ export async function createSalesChannels(db:SupabaseClient,guild:string,actorId
  for(const product of products){
   const topic=productChannelTopic(product.id);
   let channel=current.find(c=>c.topic===topic);
+  const plan=salesChannelPlan(product.name,channel);
   if(!channel){
-   channel=await request(`/guilds/${guild}/channels`,'POST',{name:productChannelName(product.name,product.id),type:0,parent_id:category.id,topic,permission_overwrites:[{id:guild,type:0,allow:'1024',deny:'2048'}]});
+   channel=await request(`/guilds/${guild}/channels`,'POST',{name:plan.name,type:0,parent_id:category.id,topic,permission_overwrites:[{id:guild,type:0,allow:'1024',deny:'2048'}]});
    if(channel?.guild_id!==guild||channel?.type!==0||channel?.parent_id!==category.id||channel?.topic!==topic)throw new BotError('SALES_CHANNEL_CREATE_FAILED');
    current.push(channel);
+  }else if(plan.action==='rename'){
+   const renamed=await request(`/channels/${channel.id}`,'PATCH',{name:plan.name});
+   if(renamed?.id!==channel.id||renamed?.guild_id!==guild||renamed?.parent_id!==category.id||renamed?.topic!==topic)throw new BotError('SALES_CHANNEL_RENAME_FAILED');
+   channel=renamed;
+   current=current.map(existing=>existing.id===channel.id?channel:existing);
   }
   let panel=checked(await db.from('discord_sales_panels').select('*').eq('guild_id',guild).eq('channel_id',channel.id).eq('panel_kind','sales').eq('active',true).limit(1).maybeSingle());
   if(panel){
@@ -50,3 +54,4 @@ export async function createSalesChannels(db:SupabaseClient,guild:string,actorId
  await audit(db,guild,actorId,'sales_channels_synced',category.id,{products:published.length,category:category.id});
  return privateMessage(`**Canais de venda atualizados**\nCategoria: #${category.name}\nProdutos publicados: **${published.length}**\n\n${published.slice(0,16).join('\n')}${published.length>16?`\n… e mais ${published.length-16} produto(s).`:''}\n\nOs cards usam preço, imagem, opções e disponibilidade atuais do site. Execute novamente depois de cadastrar novos produtos.`);
 }
+
