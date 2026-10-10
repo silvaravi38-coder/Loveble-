@@ -1,9 +1,9 @@
 const productEmojis: Array<{emoji:string; terms:string[]}> = [
   {emoji:'📼',terms:['youtube']},
   {emoji:'🎬',terms:['netflix']},
-  {emoji:'📺',terms:['prime video','amazon prime']},
+  {emoji:'📺',terms:['prime-video','amazon-prime']},
   {emoji:'🍿',terms:['hbo','max','disney']},
-  {emoji:'🎵',terms:['spotify','deezer','apple music']},
+  {emoji:'🎵',terms:['spotify','deezer','apple-music']},
   {emoji:'💎',terms:['discord nitro','nitro']},
   {emoji:'🦉',terms:['duolingo']},
   {emoji:'✂️',terms:['capcut']},
@@ -20,9 +20,11 @@ export function productChannelName(name:string,_productId?:string):string {
     .normalize('NFC')
     .replace(/[\u0000-\u001f\u007f]/g,' ')
     .replace(/[\p{Extended_Pictographic}\uFE0F]/gu,'')
-    .replace(/[@#:/\\]/g,' ')
-    .replace(/\s+/g,' ')
-    .trim()||'Produto';
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g,'-')
+    .replace(/^-+|-+$/g,'')||'produto';
   const prefix=`${productEmoji(title)}・`;
   const maxTitleLength=100-Array.from(prefix).length;
   return `${prefix}${Array.from(title).slice(0,maxTitleLength).join('').trim()}`;
