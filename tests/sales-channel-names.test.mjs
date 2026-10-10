@@ -7,6 +7,12 @@ test('sales channel names use recognizable product emojis and readable names',()
   assert.equal(productChannelName('Netflix'),'🎬・netflix');
   assert.equal(productChannelName('Spotify Premium'),'🎵・spotify-premium');
   assert.equal(productChannelName('Discord Nitro'),'💎・discord-nitro');
+  assert.equal(productChannelName('Prime Video'),'📺・prime-video');
+  assert.equal(productChannelName('HBO Max'),'🍿・hbo-max');
+  assert.equal(productChannelName('Disney+'),'🍿・disney');
+  assert.equal(productChannelName('Duolingo'),'🦉・duolingo');
+  assert.equal(productChannelName('CapCut'),'✂️・capcut');
+  assert.equal(productChannelName('Maximum'),'📦・maximum');
   assert.equal(productChannelName('Produto especial'),'📦・produto-especial');
 });
 
