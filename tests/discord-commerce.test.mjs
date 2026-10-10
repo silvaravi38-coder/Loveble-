@@ -34,6 +34,8 @@ import {scheduledDate} from '../supabase/functions/discord-interactions/schedule
 import {sendScheduled} from '../supabase/functions/discord-scheduler/worker.ts';
 import {ownerChatMessages,pollTicketChat} from '../supabase/functions/discord-scheduler/ticket-chat.ts';
 import {discord,fortalezaMonthStart} from '../supabase/functions/discord-interactions/api.ts';
+import {productChannelName,productChannelTopic} from '../supabase/functions/discord-interactions/sales-channels.ts';
+import {botConfigAction} from '../supabase/functions/discord-interactions/bot-config.ts';
 test('AI gateway billing and nested provider failures have actionable codes without exposing secrets',()=>{
  assert.equal(aiErrorCode({statusCode:500,message:'AI Gateway requires a valid credit card on file to service requests.'}),'AI_BILLING_REQUIRED');
  assert.equal(aiErrorCode({cause:{statusCode:401,message:'secret'}}),'AI_PROVIDER_UNAUTHORIZED');
@@ -64,6 +66,33 @@ test('Discord manifest conforms to command limits and keeps mandatory options be
  assert.equal(count,49);assert.equal(nexiumCommands.length,23);assert.equal(nexiumCommands.find(c=>c.name==='nexium-admin').default_member_permissions,'32');
  for(const [name,target] of Object.entries(commandAliases))if(target.command==='nexium-admin')assert.equal(nexiumCommands.find(c=>c.name===name).default_member_permissions,'32');
 
+});
+
+test('automatic sales channel names are Discord-safe and product topics uniquely identify the site product',()=>{
+ const id='11111111-2222-3333-4444-555555555555';
+ assert.equal(productChannelName('Netflix Completa',id),'netflix-completa-5555');
+ assert.equal(productChannelName('HBO Max: Premium',id),'hbo-max-premium-5555');
+ assert.equal(productChannelTopic(id),'Nexium Store product '+id);
+ assert(productChannelName('Produto '.repeat(30),id).length<=100);
+});
+
+test('Marketplace dashboard button invokes the authorized sales-channel sync action',async()=>{
+ let requested;
+ const result=await botConfigAction(actorDb('admin'),{data:{custom_id:'nexium:botconfig:run:canais-vendas'},member:{user:{global_name:'Admin'}}},'discord-user',async(action,options)=>{requested={action,options};return {content:'synced',components:[]}});
+ assert.deepEqual(requested,{action:'canais-vendas',options:{}});assert.equal(result.content,'synced');
+});
+
+test('sales channel sync creates one category/channel/card per active product and a repeat does not duplicate Discord resources',async()=>{
+ const products=[{id:'11111111-2222-3333-4444-555555555555',name:'Netflix',active:true},{id:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',name:'HBO Max',active:true}];
+ const panels=[],channels=[];let next=1,published=0;
+ const db={from(table){let action='select',payload=null,filters={};const q={select(){return this},eq(k,v){filters[k]=v;return this},order(){return this},limit(){return this},insert(v){action='insert';payload=v;return this},update(v){action='update';payload=v;return this},maybeSingle:async()=>({data:panels.find(p=>Object.entries(filters).every(([k,v])=>p[k]===v))||null,error:null}),single:async()=>{if(action==='insert'){const p={id:`panel-${panels.length+1}`,...payload};panels.push(p);return {data:p,error:null}}const p=panels.find(p=>p.id===filters.id);Object.assign(p,payload);return {data:p,error:null}},then(resolve){const data=table==='products'?products.filter(p=>p.active):action==='insert'?null:[];return Promise.resolve({data,error:null}).then(resolve)}};return q}};
+ const request=async(path,method='GET',body)=>{if(method==='GET')return channels;if(body.type===4)return {id:`channel-${next++}`,guild_id:'guild',type:4,name:body.name};const c={id:`channel-${next++}`,guild_id:'guild',type:0,parent_id:body.parent_id,topic:body.topic,name:body.name};channels.push(c);return c};
+ const {createSalesChannels}=await import('../supabase/functions/discord-interactions/sales-channels.ts');
+ const publish=async(db,guild,channel,actor,panel)=>{published++;return {content:'ok'}};
+ await createSalesChannels(db,'guild','admin',request,publish);
+ assert.equal(channels.filter(c=>c.type===4).length,1);assert.equal(channels.filter(c=>c.type===0).length,2);assert.equal(panels.length,2);assert.equal(published,2);
+ await createSalesChannels(db,'guild','admin',request,publish);
+ assert.equal(channels.filter(c=>c.type===4).length,1);assert.equal(channels.filter(c=>c.type===0).length,2);assert.equal(panels.length,2);assert.equal(published,4);
 });
 test('callback proof is tied to order and secret, provider payload strips confidential fields',async()=>{
  const first=await webhookProof('order1','secret1');assert.match(first,/^[a-f0-9]{64}$/);
