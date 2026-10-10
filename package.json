@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "node --test tests/discord-executor.test.mjs tests/discord-apply.test.mjs tests/discord-oauth.test.mjs tests/discord-interactions.test.mjs tests/discord-commerce.test.mjs tests/discord-manual-delivery.test.mjs",
+    "test": "node --test tests/discord-executor.test.mjs tests/discord-apply.test.mjs tests/discord-oauth.test.mjs tests/discord-interactions.test.mjs tests/discord-commerce.test.mjs tests/discord-manual-delivery.test.mjs tests/sales-channel-names.test.mjs",
     "check:backend": "node tests/check-discord-backend.mjs"
   },
   "dependencies": {
