@@ -71,8 +71,9 @@ test('Discord manifest conforms to command limits and keeps mandatory options be
 
 test('automatic sales channel names are Discord-safe and product topics uniquely identify the site product',()=>{
  const id='11111111-2222-3333-4444-555555555555';
- assert.equal(productChannelName('Netflix Completa',id),'netflix-completa-5555');
- assert.equal(productChannelName('HBO Max: Premium',id),'hbo-max-premium-5555');
+ assert.equal(productChannelName('Netflix Completa',id),'🍿・Netflix Completa');
+ assert.equal(productChannelName('HBO Max: Premium',id),'🎬・HBO Max Premium');
+ assert.equal(productChannelName('YouTube Premium',id),'📼・YouTube Premium');
  assert.equal(productChannelTopic(id),'Nexium Store product '+id);
  assert(productChannelName('Produto '.repeat(30),id).length<=100);
 });
