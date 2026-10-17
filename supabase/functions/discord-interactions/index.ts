@@ -10,6 +10,7 @@ import {recoveryMessageFor} from './recovery-messages.ts';
 import {BotError} from './api.ts';
 import {deliverAndComplete} from './delivery.ts';
 import {restockModal,saveRestock} from './restock.ts';
+import {orderPickerAction,saveOrderCosts} from './workflow-selectors.ts';
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 Deno.serve(async(req:Request)=>{
   if(req.method==='GET' && new URL(req.url).searchParams.get('health')==='1')return json({version:'commerce-tickets-v1',ai_configured:!!(Deno.env.get('GROQ_API_KEY')||Deno.env.get('AI_GATEWAY_API_KEY')),pix_configured:!!Deno.env.get('TURBOFYPAY_CLIENT_ID')&&!!Deno.env.get('TURBOFYPAY_CLIENT_SECRET')});
@@ -28,13 +29,18 @@ Deno.serve(async(req:Request)=>{
   if(!/^[0-9]{17,20}$/.test(input.id||'') || !/^[0-9]{17,20}$/.test(userId||'') || typeof input.token!=='string' || !/^[A-Za-z0-9._-]{1,512}$/.test(input.token))return json({error:'INVALID_INTERACTION'},400);
   try{const modal=await paymentConfigModal(db,input,userId)||await createProductModal(db,input,userId)||await productRequestModal(db,input)||await ticketModal(db,input,userId)||await restockModal(db,input,userId);if(modal)return json(modal);}catch(error){const code=error instanceof BotError?error.code:'INTERNAL_ERROR';return json({type:4,data:{content:errorMessages[code]||recoveryMessageFor(code)||'Não foi possível abrir o formulário.',flags:64,allowed_mentions:{parse:[]}}});}
   const action=eventAction(input);
+  // A Discord modal must be returned as the immediate response to the selection.
+  if(input.type===3&&input.data?.custom_id==='nexium:order-picker:costs'){
+    try{return json(await orderPickerAction(db,input,userId,'costs'));}
+    catch(error){const code=error instanceof BotError?error.code:'INTERNAL_ERROR';return json({type:4,data:{content:errorMessages[code]||recoveryMessageFor(code)||'Não foi possível abrir o formulário.',flags:64,allowed_mentions:{parse:[]}}});}
+  }
   const receipt=await db.from('discord_interaction_events').insert({interaction_id:input.id,guild_id:input.guild_id,discord_user_id:userId,action});
   if(receipt.error)return json({error:receipt.error.code==='23505'?'INTERACTION_ALREADY_RECEIVED':'DATABASE_ERROR'},receipt.error.code==='23505'?409:500);
   // Acknowledge privately before querying orders; never expose purchases in a public channel.
   EdgeRuntime.waitUntil((async()=>{
     let message=privateMessage('Não foi possível consultar agora. Tente novamente.');let code='INTERNAL_ERROR';
     try{
-      message=input.type===5&&String(input.data?.custom_id).startsWith('nexium:manual-stock:')?await saveManualQuantity(db,input,userId):input.type===5&&input.data?.custom_id==='nexium:payment-config:save'?await savePaymentConfig(db,input,userId):input.type===5&&input.data?.custom_id==='nexium:store:create-submit'?await submitCreatedProduct(db,input,userId):input.type===5&&String(input.data?.custom_id).startsWith('nexium:stock-request-submit:')?await submitProductRequest(db,input,userId):input.type===5&&String(input.data?.custom_id).startsWith('nexium:restock:')?await saveRestock(db,input,userId):input.type===5?await submitTicketModal(db,input,userId):await route(db,input,userId);code='ACTION_OK';
+      message=input.type===5&&String(input.data?.custom_id).startsWith('nexium:manual-stock:')?await saveManualQuantity(db,input,userId):input.type===5&&input.data?.custom_id==='nexium:payment-config:save'?await savePaymentConfig(db,input,userId):input.type===5&&input.data?.custom_id==='nexium:store:create-submit'?await submitCreatedProduct(db,input,userId):input.type===5&&String(input.data?.custom_id).startsWith('nexium:stock-request-submit:')?await submitProductRequest(db,input,userId):input.type===5&&String(input.data?.custom_id).startsWith('nexium:restock:')?await saveRestock(db,input,userId):input.type===5&&String(input.data?.custom_id).startsWith('nexium:cost-submit:')?await saveOrderCosts(db,input,userId):input.type===5?await submitTicketModal(db,input,userId):await route(db,input,userId);code='ACTION_OK';
     }catch(error){code=error instanceof BotError?error.code:'INTERNAL_ERROR';message=privateMessage(errorMessages[code]||recoveryMessageFor(code)||'Não foi possível concluir esta ação agora. Consulte o suporte.');}
     // Interaction token is kept only in this request's memory, never in audit records.
     let delivered=false;
