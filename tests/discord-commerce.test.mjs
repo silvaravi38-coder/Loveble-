@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 14811)
+Total output lines: 510
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {nexiumCommands,commandAliases} from '../supabase/functions/discord-executor/commands.ts';
@@ -31,7 +34,7 @@ test('Groq adapter parses tokens and exposes only safe errors',async()=>{
  assert.equal(request.model,'openai/gpt-oss-20b');assert.equal(result.text,'Resposta');assert.equal(result.totalUsage.totalTokens,20);
  await assert.rejects(groqReply('key','rules','question',500,async()=>new Response('secret',{status:401})),e=>e.code==='AI_PROVIDER_UNAUTHORIZED');
 });
-import {scheduledDate} from '../supabase/functions/discord-interactions/schedules.ts';
+import {scheduledDate,manageSchedules} from '../supabase/functions/discord-interactions/schedules.ts';
 import {sendScheduled} from '../supabase/functions/discord-scheduler/worker.ts';
 import {ownerChatMessages,pollTicketChat} from '../supabase/functions/discord-scheduler/ticket-chat.ts';
 import {discord,fortalezaMonthStart} from '../supabase/functions/discord-interactions/api.ts';
@@ -132,6 +135,25 @@ test('AI order context enforces ticket customer ownership and strips payment/del
 
 test('schedules require a timezone and uncertain message sends are not retried',async()=>{assert.throws(()=>scheduledDate('2026-10-08T12:00'),e=>e.code==='SCHEDULE_DATE_REQUIRED');assert.throws(()=>scheduledDate('2026-01-01T12:00:00-03:00'),e=>e.code==='SCHEDULE_DATE_REQUIRED');let updates=[],calls=0;const db={from(table){return {select(){return this},eq(){return this},maybeSingle:async()=>({data:{role:'admin'},error:null}),update(value){updates.push(value);return this;},then(resolve){return Promise.resolve({data:null,error:null}).then(resolve)}}}};await sendScheduled(db,{id:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',requested_by:'admin',guild_id:'guild',channel_id:'channel',attempts:1,content:'hello',scheduled_at:'date'},async(path,method)=>{calls++;if(method==='POST'){const {BotError}=await import('../supabase/functions/discord-interactions/api.ts');throw new BotError('MUTATION_UNCERTAIN');}return {guild_id:'guild',type:0}});assert.equal(calls,2);assert.equal(updates[0].status,'uncertain');});
 
+test('scheduled message list is a private embed with readable local times, content and cancellation IDs',async()=>{
+ const scheduledAt='2026-10-18T17:30:00.000Z';
+ const rows=[{id:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',channel_id:'1550000000000000001',content:'A promoção começa hoje!',scheduled_at:scheduledAt,status:'queued'}];
+ const data={discord_account_links:{data:{profile_id:'profile'},error:null},profiles:{data:{id:'profile',role:'admin'},error:null},discord_scheduled_messages:{data:rows,error:null}};
+ const db={from(table){const result=data[table];return {select(){return this},eq(){return this},order(){return this},limit(){return this},single(){return Promise.resolve(result)},maybeSingle(){return Promise.resolve(result)},then(resolve,reject){return Promise.resolve(result).then(resolve,reject)}}}};
+ const result=await manageSchedules(db,{guild_id:'guild'},'discord-user','mensagens',{});
+ assert.equal(result.content,null);assert.equal(result.embeds[0].title,'⏰ Mensagens programadas • 1');
+ assert.match(result.embeds[0].description,/Fortaleza \(UTC−03:00\)/);
+ assert.match(result.embeds[0].fields[0].name,/🕒/);assert.match(result.embeds[0].fields[0].value,/A promoção começa hoje/);
+ assert.match(result.embeds[0].fields[0].value,/<t:\d+:F>/);assert.match(result.embeds[0].fields[0].value,/<#1550000000000000001>/);
+ assert.match(result.embeds[0].fields[0].value,/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/);
+});
+
+test('scheduling rejects empty text instead of saving the word undefined',async()=>{
+ const data={discord_account_links:{data:{profile_id:'profile'},error:null},profiles:{data:{id:'profile',role:'admin'},error:null}};
+ const db={from(table){const result=data[table];return {select(){return this},eq(){return this},single(){return Promise.resolve(result)},maybeSingle(){return Promise.resolve(result)}}}};
+ await assert.rejects(manageSchedules(db,{guild_id:'guild',channel_id:'channel'},'discord-user','agendar',{texto:'  ',quando:'2026-10-18T14:30:00-03:00'}),e=>e.code==='INVALID_SCHEDULE_MESSAGE');
+});
+
 test('empty automatic inventory prevents provider charge even with configured credentials',async()=>{
  const previousDeno=globalThis.Deno,previousFetch=globalThis.fetch;let calls=0;
  globalThis.Deno={env:{get:()=> 'test-credential'}};globalThis.fetch=async()=>{calls++;throw Error('provider must not be called')};
@@ -145,174 +167,7 @@ test('help lists the published commands and support month respects Fortaleza at 
 test('ticket panel selects original Nexium subjects and unpublish removes all controls',async()=>{
  const {ticketPanel,ticketControls}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');
  const panel={id:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',name:'Atendimento Nexium'};
- const payload=ticketPanel(panel);assert.equal(payload.components[0].components[0].type,3);assert.deepEqual(payload.components[0].components[0].options.map(s=>s.label),['Suporte','Dúvida','Receber Produto','Vaga Staff']);assert.match(payload.embeds[0].description,/08:00 às 11:00 e 20:30 às 22:00/);assert.match(payload.embeds[0].description,/10:00 às 21:00/);assert.deepEqual(payload.allowed_mentions.parse,[]);assert.equal(ticketPanel(panel,true).components.length,0);
- const buttons=ticketControls(panel.id).flatMap(r=>r.components);assert.equal(buttons.length,4);for(const b of buttons)assert(b.custom_id.length<=100);assert(buttons.some(b=>b.custom_id.includes('ticket-save-delete')));
-});
-test('ticket opening skips modal and stale panels cannot create a ticket',async()=>{
- const {ticketModal,submitTicketModal,modalValues}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');
- const id='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';let rpcCalls=0;
- const db={from(table){return {select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'profile'}:{id,message_id:'1557132199227031552'},error:null}),single:async()=>({data:{id:'profile',role:'customer'},error:null})}},rpc(){rpcCalls++;throw Error('must not create')}};
- const input={type:3,guild_id:'guild',channel_id:'channel',message:{id:'1557132199227031552'},data:{custom_id:`nexium:ticket-open:${id}`,values:['payment']}};
- assert.equal(await ticketModal(db,input,'user'),null);assert.equal(rpcCalls,0);
- await assert.rejects(()=>route(db,{...input,message:{id:'other'}},'user'),e=>e.code==='PANEL_PRODUCT_MISMATCH');
- const submit={...input,type:5,data:{custom_id:`nexium:ticket-new:${id}:payment:other`,components:[{type:18,component:{custom_id:'reason',value:'Ajuda no pagamento'}}]}};
- await assert.rejects(()=>submitTicketModal(db,submit,'user'),e=>e.code==='PANEL_PRODUCT_MISMATCH');assert.equal(rpcCalls,0);
- assert.deepEqual(modalValues({data:{components:[{type:18,component:{custom_id:'outcome',values:['resolved']}}]}}),{outcome:'resolved'});
-});
-test('customer cannot open staff finalization form and form audit never stores reason',async()=>{
- const {ticketModal}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');const db=actorDb('customer');db.rpc=async()=>({data:{ticket:{status:'open',user_id:'profile'},discord:{channel_id:'channel'}},error:null});
- await assert.rejects(()=>ticketModal(db,{type:3,guild_id:'guild',channel_id:'channel',data:{custom_id:'nexium:ticket-close:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'}},'user'),e=>e.code==='CLAIM_REQUIRED');
- assert.equal(eventAction({type:5,data:{custom_id:'nexium:ticket-finish:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',components:[{value:'PRIVATE'}]}}),'nexium:ticket-finish');
-});
-
-test('ticket card shows real client/staff metadata and closed controls cannot claim again',async()=>{
- const {ticketCard}=await import('../supabase/functions/discord-interactions/ticket-card.ts');
- const card=ticketCard('ticket-id',{id:'ticket-id',status:'open',subject:'Ajuda no acesso',created_at:'2026-10-06T23:21:00Z',priority:'normal',order_id:null},{id:'client',username:'cliente',avatar:null},{full_name:'Atendente'},'role');
- assert.equal(card.embeds[0].author.name,'cliente');assert.equal(card.embeds[0].title,'Ajuda no acesso');assert.equal(card.embeds[0].fields,undefined);assert.equal(card.embeds[0].color,0xffffff);assert.deepEqual(card.allowed_mentions.parse,[]);assert(card.components.length<=5);
- const closed=ticketCard('ticket-id',{status:'resolved',subject:'Ajuda',created_at:'2026-10-06T23:21:00Z',priority:'normal'},{id:'client'},null);assert(!closed.components.flatMap(r=>r.components).some(b=>b.custom_id.includes('ticket-claim')));
-});
-test('deletion requires closed bot-created ticket and permission drift changes preview fingerprint',async()=>{
- const {requireDeletableTicket,channelFingerprint}=await import('../supabase/functions/discord-interactions/ticket-actions.ts');
- const view={ticket:{id:'id',status:'resolved'},discord:{closed_at:'date',channel_id:'channel',channel_state:'ready'}};
- const channel={id:'channel',guild_id:'guild',type:0,topic:'Nexium ticket id',permission_overwrites:[{id:'a',allow:'0',deny:'1024'}]};
- assert.doesNotThrow(()=>requireDeletableTicket(view,channel,'guild'));
- assert.throws(()=>requireDeletableTicket({...view,discord:{...view.discord,closed_at:null}},channel,'guild'),e=>e.code==='TICKET_CLOSE_BEFORE_DELETE');
- assert.throws(()=>requireDeletableTicket(view,{...channel,topic:'Another bot ticket'},'guild'),e=>e.code==='PROTECTED_TICKET_CHANNEL');
- assert.throws(()=>requireDeletableTicket(view,{...channel,guild_id:'other'},'guild'),e=>e.code==='PROTECTED_TICKET_CHANNEL');
- assert.notEqual(channelFingerprint(channel),channelFingerprint({...channel,permission_overwrites:[]}));
-});
-test('staff cannot create a PIX for themselves from another customer ticket',async()=>{
- const {ticketActionButton}=await import('../supabase/functions/discord-interactions/ticket-actions.ts');const db=actorDb('admin');db.rpc=async()=>({data:{ticket:{user_id:'customer',order_id:'order'},discord:{channel_id:'channel'}},error:null});
- await assert.rejects(()=>ticketActionButton(db,{guild_id:'guild',channel_id:'channel'},'staff','ticket-payment','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='TICKET_PAYMENT_OWNER_REQUIRED');
- const denied=actorDb('customer');denied.rpc=db.rpc;await assert.rejects(()=>ticketActionButton(denied,{guild_id:'guild',channel_id:'channel'},'customer','ticket-staff','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
-});
-
-test('repeated ticket opening returns the existing channel without a Discord mutation',async()=>{
- const {openTicket}=await import('../supabase/functions/discord-interactions/tickets.ts');
- const db=actorDb('customer');const from=db.from;db.from=table=>table==='discord_tickets'?{select(){return this},eq(){return this},is(){return this},limit:async()=>({data:[],error:null})}:from(table);let rpcCalls=0;db.rpc=async()=>{rpcCalls++;return {data:{reused:true,channel_id:'123',ticket_id:'ticket'},error:null};};
- const message=await openTicket(db,{guild_id:'guild',id:'interaction'},'user','Pagamento PIX');
- assert.equal(rpcCalls,1);assert.match(message.content,/<#123>/);assert.equal(message.components[0].components[0].url,'https://discord.com/channels/guild/123');
-});
-
-test('deleted panel messages recover only after a confirmed 404; unpublishing does not recreate them',async()=>{
- const {publishPanelMessage}=await import('../supabase/functions/discord-interactions/catalog.ts');
- const {BotError}=await import('../supabase/functions/discord-interactions/api.ts');
- const panel={id:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',channel_id:'channel',message_id:'deleted'};const calls=[];
- const request=async(path,method='GET',payload)=>{calls.push(method);if(method==='GET')throw new BotError('DISCORD_RESOURCE_NOT_FOUND');assert.equal(payload.enforce_nonce,true);return {id:'replacement'};};
- assert.equal((await publishPanelMessage(panel,{},false,request)).id,'replacement');assert.deepEqual(calls,['GET','POST']);calls.length=0;
- assert.equal(await publishPanelMessage(panel,{},true,request),null);assert.deepEqual(calls,['GET']);
- await assert.rejects(()=>publishPanelMessage(panel,{},false,async()=>{throw new BotError('DISCORD_NETWORK')}),e=>e.code==='DISCORD_NETWORK');
-});
-test('ticket menu uses available local server emojis and never foreign or restricted IDs',async()=>{
- const {ticketPanel}=await import('../supabase/functions/discord-interactions/ticket-ui.ts');
- const emojis=['suporte','info','package1','55609admingreenCopia','alliancearrows4'].map((name,i)=>({name,id:String(i+1),available:true,roles:[],animated:name==='alliancearrows4'}));
- const panel=ticketPanel({id:'panel'},false,emojis);const options=panel.components[0].components[0].options;
- assert.deepEqual(options.map(o=>o.emoji.id),['1','2','3','4']);assert.match(panel.embeds[0].description,/<a:alliancearrows4:5>/);assert(!JSON.stringify(panel).includes('1434217902927646913'));
- const restricted=ticketPanel({id:'panel'},false,[{name:'suporte',id:'blocked',roles:['role'],available:true}]);assert(!JSON.stringify(restricted).includes('blocked'));
-});
-test('ticket panel selector protects staff tools and member controls belong to ticket owner',async()=>{
- const {ticketActionButton}=await import('../supabase/functions/discord-interactions/ticket-actions.ts');
- const db=actorDb('customer');db.rpc=async()=>({data:{ticket:{user_id:'profile',status:'open'},discord:{channel_id:'channel'}},error:null});
- const input={guild_id:'guild',channel_id:'channel',data:{values:['staff']}};
- await assert.rejects(()=>ticketActionButton(db,input,'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
- const panel=await ticketActionButton(db,{...input,data:{values:['member']}},'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');assert.match(panel.content,/Painel Membro/);assert.equal(panel.components.length,2);
- db.rpc=async()=>({data:{ticket:{user_id:'other',status:'open'},discord:{channel_id:'channel'}},error:null});
- await assert.rejects(()=>ticketActionButton(db,{...input,data:{values:['member']}},'user','ticket-panels','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='FORBIDDEN');
-});
-
-
-test('legacy shortcuts preserve flat parameters and route through the same protected handlers',async()=>{
- assert.deepEqual(commandParts({data:{name:'payment',options:[{name:'produto',value:'Netflix'},{name:'cupom',value:'NEXIUM10'}]}}),{command:'nexium',sub:'comprar',options:{produto:'Netflix',cupom:'NEXIUM10'}});
- assert.deepEqual(commandParts({data:{name:'gerenciar_stock',options:[{name:'acao',value:'repor'},{name:'produto',value:'Netflix'}]}}),{command:'nexium-admin',sub:'restock',options:{acao:'repor',produto:'Netflix'}});
- assert.throws(()=>commandParts({data:{name:'gerenciar_stock',options:[{name:'acao',value:'repor'}]}}),e=>e.code==='PRODUCT_REQUIRED');
- for(const [name,target] of Object.entries(commandAliases))if(target.command==='nexium-admin')await assert.rejects(()=>route(actorDb('customer'),{type:2,data:{name}},'customer'),e=>e.code==='FORBIDDEN');
- await assert.rejects(()=>restockModal(actorDb('customer'),{type:2,data:{name:'gerenciar_stock',options:[{name:'acao',value:'repor'},{name:'produto',value:'Netflix'}]}},'customer'),e=>e.code==='FORBIDDEN');
- await assert.rejects(()=>route(actorDb('customer'),{type:3,data:{custom_id:'nexium:admin-menu:v1',values:['financeiro']}},'customer'),e=>e.code==='FORBIDDEN');
-});
-
-test('profile shortcut scopes counts to the linked owner and omits email and credentials',async()=>{
- const filters=[];const db={from(table){return{select(){return this},eq(key,value){filters.push({table,key,value});return this},maybeSingle:async()=>({data:{profile_id:'linked-profile'},error:null}),single:async()=>({data:{id:'linked-profile',role:'customer',full_name:'Cliente'},error:null}),then(resolve){return Promise.resolve({count:4,error:null}).then(resolve)}}}};
- const card=await route(db,{type:2,data:{name:'meu_perfil'}},'discord-id');
- assert.match(card.content,/4/);assert(filters.some(f=>f.table==='orders'&&f.key==='user_id'&&f.value==='linked-profile'));assert.deepEqual(card.allowed_mentions.parse,[]);
-});
-
-test('announcements validate guild and suppress mentions with an interaction nonce',async()=>{
- const {announce}=await import('../supabase/functions/discord-interactions/shortcuts.ts');
- const previousFetch=globalThis.fetch,previousDeno=globalThis.Deno;const requests=[];
- globalThis.Deno={env:{get:()=> 'test-token'}};
- const db={from(){return{insert:async()=>({data:null,error:null})}}};
- const input={id:'999999999999999999',guild_id:'guild',channel_id:'999999999999999990'};
- globalThis.fetch=async(url,options)=>{requests.push({url,options});return new Response(JSON.stringify(options.method==='GET'?{guild_id:'guild',type:0}:{id:'posted'}));};
- try{
-  const result=await announce(db,input,'admin',{texto:'Anúncio @everyone'});assert.match(result.content,/posted/);
-  const payload=JSON.parse(requests[1].options.body);assert.deepEqual(payload.allowed_mentions.parse,[]);assert.equal(payload.nonce,input.id);assert.equal(payload.enforce_nonce,true);
-  globalThis.fetch=async()=>new Response(JSON.stringify({guild_id:'different-guild',type:0}));
-  await assert.rejects(()=>announce(db,input,'admin',{texto:'Anúncio'}),e=>e.code==='WRONG_PANEL_CHANNEL');
-  await assert.rejects(()=>announce(db,input,'admin',{texto:' '.repeat(3)}),e=>e.code==='INVALID_ANNOUNCEMENT');
- }finally{globalThis.fetch=previousFetch;globalThis.Deno=previousDeno;}
-});
-
-
-test('command registration honors explicit rate limits without retrying validation or uncertain writes',async()=>{
- const {registerCommands}=await import('../supabase/functions/discord-executor/runtime.ts');
- const waits=[];let calls=0;
- const definitions=[{name:'admin'},{name:'meu_perfil'}];
- const fetcher=async()=>{calls++;return calls===1?new Response(JSON.stringify({retry_after:0.5}),{status:429}):new Response(JSON.stringify({id:String(calls)}));};
- const result=await registerCommands('app','guild','test-token',definitions,fetcher,async ms=>{waits.push(ms)});assert.equal(result.length,2);assert.equal(calls,3);assert.deepEqual(waits,[500]);
- calls=0;await assert.rejects(()=>registerCommands('app','guild','test-token',definitions,async()=>{calls++;return new Response('{}',{status:400})}),e=>e.code==='COMMAND_REGISTRATION_400_admin');assert.equal(calls,1);
- calls=0;await assert.rejects(()=>registerCommands('app','guild','test-token',definitions,async()=>{calls++;throw Error('timeout')}),e=>e.code==='COMMAND_REGISTRATION_UNCERTAIN_admin');assert.equal(calls,1);
-});
-
-test('botconfig without arguments opens the dashboard without writing settings',async()=>{
- const reads=[];let writes=0;
- const db={from(table){reads.push(table);return{select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{pix_enabled:true,role_customer_id:'999999999999999990'},error:null}),single:async()=>({data:{id:'admin',role:'admin',full_name:'Ariel'},error:null}),insert(){writes++;throw Error('must not write')},update(){writes++;throw Error('must not write')}}}};
- const result=await route(db,{type:2,guild_id:'guild',data:{name:'botconfig'}},'user');
- assert.match(result.embeds[0].title,/Ariel/);assert(result.embeds[0].fields.some(f=>/Vendas Pix/.test(f.name)&&/Abertas/.test(f.value)));assert(result.components.flatMap(r=>r.components).some(c=>c.label==='Marketplace'));assert.equal(writes,0);assert(reads.includes('discord_bot_settings'));
-});
-
-test('every botconfig page fits Discord limits and private responses suppress mentions',async()=>{
- const {botConfigPanel}=await import('../supabase/functions/discord-interactions/bot-config.ts');
- const db={from(table){return{select(){return this},eq(){return this},is(){return this},limit(){return this},then(resolve){return Promise.resolve({data:[],error:null}).then(resolve)},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{pix_enabled:true},error:null}),single:async()=>({data:{id:'admin',role:'admin',full_name:'Ariel'},error:null})}}};
- for(const page of ['home','marketplace','atendimento','definicoes','automacoes','moderacao','rendimento','tools','permissoes','pagamentos','cargos','canais','notificacoes','ia','divulgacao','personalizacao','oauth']){
-  const result=await botConfigPanel(db,{guild_id:'guild'},'user',page);assert(result.components.length<=5);assert(result.embeds[0].description.length<=4096);assert.deepEqual(result.allowed_mentions.parse,[]);
-  for(const r of result.components){assert(r.components.length<=5);for(const c of r.components){assert((c.custom_id||'').length<=100);if(c.label)assert(c.label.length<=80);}}
- }
-});
-
-test('configuration controls reject customers, arbitrary fields and malformed selection',async()=>{
- const {botConfigAction}=await import('../supabase/functions/discord-interactions/bot-config.ts');let calls=0;
- const execute=async()=>{calls++;return{components:[]}};
- for(const id of ['tab:home','toggle:pix_enabled:off','set:role_support_id','run:backup'])await assert.rejects(()=>botConfigAction(actorDb('customer'),{data:{custom_id:'nexium:botconfig:'+id,values:['999999999999999990']}},'user',execute),e=>e.code==='FORBIDDEN');
- await assert.rejects(()=>botConfigAction(actorDb('admin'),{data:{custom_id:'nexium:botconfig:toggle:role:on'}},'user',execute),e=>e.code==='UNSUPPORTED_ACTION');
- await assert.rejects(()=>botConfigAction(actorDb('admin'),{data:{custom_id:'nexium:botconfig:set:role_support_id',values:['not-a-role']}},'user',execute),e=>e.code==='INVALID_ID');
- await assert.rejects(()=>botConfigAction(actorDb('admin'),{data:{custom_id:'nexium:botconfig:run:aplicar'}},'user',execute),e=>e.code==='UNSUPPORTED_ACTION');assert.equal(calls,0);
-});
-
-test('configuration changes use explicit desired states and existing validated admin handlers',async()=>{
- const {botConfigAction}=await import('../supabase/functions/discord-interactions/bot-config.ts');const calls=[];
- const db={from(table){return{select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{pix_enabled:false},error:null}),single:async()=>({data:{id:'admin',role:'admin',full_name:'Ariel'},error:null})}}};
- const execute=async(sub,options)=>{calls.push({sub,options});return{components:[]}};
- await botConfigAction(db,{guild_id:'guild',data:{custom_id:'nexium:botconfig:toggle:pix_enabled:off'}},'user',execute);
- await botConfigAction(db,{guild_id:'guild',data:{custom_id:'nexium:botconfig:set:role_support_id',values:['999999999999999990']}},'user',execute);
- assert.deepEqual(calls,[{sub:'configurar',options:{pix:false}},{sub:'configurar',options:{suporte:'999999999999999990'}}]);
-});
-
-test('explicit role settings stay manual and foreign channels cannot be saved',async()=>{
- const previousFetch=globalThis.fetch,previousDeno=globalThis.Deno;const writes=[];
- globalThis.Deno={env:{get:()=> 'test-token'}};
- const db={from(table){return{select(){return this},eq(){return this},maybeSingle:async()=>({data:table==='discord_account_links'?{profile_id:'admin'}:{id:'settings'},error:null}),single:async()=>({data:{id:'admin',role:'admin',full_name:'Ariel'},error:null}),update(data){writes.push(data);return this},insert:async()=>({data:null,error:null}),then(resolve){return Promise.resolve({data:null,error:null}).then(resolve)}}}};
- try{
-  globalThis.fetch=async()=>new Response(JSON.stringify([{id:'999999999999999990',managed:false}]));
-  await route(db,{type:2,guild_id:'guild',data:{name:'botconfig',options:[{name:'cliente',value:'999999999999999990'}]}},'user');
-  assert.equal(writes[0].role_customer_id,'999999999999999990');assert.equal(writes[0].id_mode,'manual');
-  globalThis.fetch=async()=>new Response(JSON.stringify({guild_id:'other-guild',type:0}));
-  await assert.rejects(()=>route(db,{type:2,guild_id:'guild',data:{name:'botconfig',options:[{name:'logs',value:'999999999999999990'}]}},'user'),e=>e.code==='WRONG_PANEL_CHANNEL');assert.equal(writes.length,1);
- }finally{globalThis.fetch=previousFetch;globalThis.Deno=previousDeno;}
-});
-
-
-test('automation dropdown only routes allowed pages and financial buttons keep selected windows',async()=>{
- const {botConfigAction}=await import('../supabase/functions/discord-interactions/bot-config.ts');
+ const payload=ticketPanel(panel);assert.equal(payload.components[0].components[0].type,3);assert.deepEqual(payload.components[0].components[0].options.map(s=>s.label),['Suporte','Dúvida','Receb…4811 tokens truncated…nctions/discord-interactions/bot-config.ts');
  const calls=[];const execute=async(sub,options)=>{calls.push({sub,options});return{components:[]}};
  await botConfigAction(actorDb('admin'),{data:{custom_id:'nexium:botconfig:run:financeiro:7days'}},'user',execute);
  await botConfigAction(actorDb('admin'),{data:{custom_id:'nexium:botconfig:run:financeiro:30days'}},'user',execute);
