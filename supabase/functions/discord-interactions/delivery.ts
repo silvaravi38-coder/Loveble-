@@ -1,4 +1,5 @@
-import {sendWithRetry} from './delivery-retry.js';\nimport {styleNexiumMessagePayload} from './brand.ts';
+import {sendWithRetry} from './delivery-retry.js';
+import {styleNexiumMessagePayload} from './brand.ts';
 export type PrivateFile={name:string;content:Uint8Array|string;type:string};
 export async function deliverResponse(url:string,message:any,send:typeof fetch=fetch) {
  const {files,afterDelivery,...payload}=styleNexiumMessagePayload(message);
