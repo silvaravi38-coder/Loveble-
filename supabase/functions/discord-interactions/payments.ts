@@ -38,14 +38,14 @@ export async function fulfilPaid(db:SupabaseClient,orderId:string) {
    name:safeText(item.product_name,100)+(item.variant_name?' • '+safeText(item.variant_name,70):''),
    value:`${Number(item.quantity)||1}x • ${money(Number(item.unit_price)*(Number(item.quantity)||1))}`
   })).slice(0,10);
-  const receipt={author:{name:'NEXIUM STORE • CENTRAL DE PEDIDOS'},title:'🎉 Compra realizada',description:'Seu pagamento foi confirmado com sucesso! Confira abaixo os detalhes do seu pedido.',color:0x5865f2,fields:[
+  const receipt={author:{name:'NEXIUM STORE • CENTRAL DE PEDIDOS'},title:'🧾 Compra confirmada',description:'Uma nova compra foi confirmada na Nexium Store. Obrigado por apoiar a loja!',color:0x5865f2,fields:[
    {name:'━━━━━━━━━━━━━━━━━━━━',value:'\u200b',inline:false},
-   {name:'🛍️ Detalhes da compra',value:`**Cliente:** <@${request.discord_user_id}>\n**Pedido:** #${orderId.slice(0,8).toUpperCase()}\n\n${cart.length?cart.map(item=>`**${item.name}**\n${item.value}`).join('\n\n'):'Pedido da Nexium Store'}`,inline:false},
+   {name:'🛍️ Produtos',value:cart.length?cart.map(item=>`**${item.name}**\n${item.value}`).join('\n\n'):'Compra na Nexium Store',inline:false},
    {name:'━━━━━━━━━━━━━━━━━━━━',value:'\u200b',inline:false},
-   {name:'💳 Pagamento',value:`**Forma de pagamento**\nPIX\n\n**Status**\n🟢 Aprovado\n\n**VALOR PAGO**\n**${money(ord.total)}**`,inline:false}
+   {name:'💳 Pagamento aprovado',value:`**Forma:** PIX\n**Status:** 🟢 Confirmado\n**Total pago:** **${money(ord.total)}**`,inline:false}
   ],footer:{text:'NEXIUM STORE • Obrigado pela preferência!'},timestamp:payment?.paid_at||new Date().toISOString()};
-  const receiptComponents=[row([linkButton('Acessar minha conta','https://nexium-store.vercel.app')])];
-  notifications.push({dedupe_key:`paid-log:${orderId}`,guild_id:request.guild_id,kind:'log',channel_id:logChannel,content:'🧾 Comprovante de pagamento confirmado.',payload:{type:'payment_receipt',embed:receipt,components:receiptComponents}});
+  const receiptComponents=[];
+  notifications.push({dedupe_key:`paid-log:${orderId}`,guild_id:request.guild_id,kind:'log',channel_id:logChannel,content:'🧾 **Nova compra confirmada!**',payload:{type:'payment_receipt',embed:receipt,components:receiptComponents}});
  }
  if(notifications.length)checked(await db.from('discord_bot_outbox').upsert(notifications,{onConflict:'dedupe_key',ignoreDuplicates:true}));
  if(ord.status==='delivered'){const processed=checked(await db.from('discord_audit_events').select('id').eq('action','delivery_notification_processed').eq('entity_id',orderId).limit(1));if(!processed.length)await audit(db,request.guild_id,ord.user_id,'delivery_notification_processed',orderId);}
