@@ -1,4 +1,5 @@
-import {styleNexiumMessagePayload} from '../discord-interactions/brand.ts';\nexport class ExecutorError extends Error {
+import {styleNexiumMessagePayload} from '../discord-interactions/brand.ts';
+export class ExecutorError extends Error {
   code: string;
   httpStatus: number;
   constructor(code: string, httpStatus = 400) { super(code); this.code = code; this.httpStatus = httpStatus; }
