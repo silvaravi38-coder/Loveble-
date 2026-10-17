@@ -66,7 +66,7 @@ export async function saveOrderCosts(db:SupabaseClient,input:any,user:string){
  for(const r of input.data.components||[])for(const c of r.components||[])values[c.custom_id]=String(c.value||'').trim();
  const parse=(raw:string)=>{const normalized=raw.replace(/\s/g,'');return Number(normalized.includes(',')?normalized.replace(/\./g,'').replace(',','.'):normalized);};
  const cost=parse(values.cost||''),fee=parse(values.fee||'');
- if(!Number.isFinite(cost)||!Number.isFinite(fee)||cost<0||fee<0||!values.reason||values.reason.length<3)throw new BotError('INVALID_FINANCE_DATA');
+ if(!values.cost||!values.fee||!Number.isFinite(cost)||!Number.isFinite(fee)||cost<0||fee<0||!values.reason||values.reason.length<3)throw new BotError('INVALID_FINANCE_DATA');
  const order=checked(await db.from('orders').select('id,status').eq('id',id).maybeSingle());
  if(!order||!['paid','processing','delivered'].includes(order.status))throw new BotError('ORDER_NOT_PAID');
  checked(await db.from('discord_order_finance').upsert({order_id:id,cost,fee,note:safeText(values.reason,300),updated_by:actor.id,updated_at:new Date().toISOString()}));
