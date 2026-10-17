@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {verifyDiscordSignature,interactionAction,orderMessage,privateMessage} from '../supabase/functions/discord-interactions/security.ts';
+import {adminDashboard} from '../supabase/functions/discord-interactions/shortcuts.ts';
 const hex=data=>Buffer.from(data).toString('hex');
 test('Discord signature verifies raw timestamp+body and rejects tampering, replay age and wrong key',async()=>{
  const pair=await crypto.subtle.generateKey('Ed25519',true,['sign','verify']);
@@ -25,6 +26,17 @@ test('order responses do not include credentials, delivery text or amounts and s
  assert.match(response.content,/#12345678 — Entregue/);assert.match(response.content,/Status indisponível/);
  assert.equal(JSON.stringify(response).includes('SECRET'),false);assert.deepEqual(response.allowed_mentions.parse,[]);
  assert.match(orderMessage([]).content,/Nenhum pedido/);assert.deepEqual(privateMessage('@everyone').allowed_mentions.parse,[]);
+});
+
+test('admin dashboard is structured as a private embed with clear sections and working controls',()=>{
+ const dashboard=adminDashboard();
+ assert.equal(dashboard.content,null);
+ assert.equal(dashboard.embeds[0].title,'🛠️ Central administrativa Nexium');
+ assert.ok(dashboard.embeds[0].description.includes('**🛍️ Produtos e estoque**'));
+ assert.ok(dashboard.embeds[0].description.includes('`/gerenciar_produto`'));
+ assert.equal(dashboard.components[0].components[0].type,3);
+ assert.equal(dashboard.components[1].components[0].style,5);
+ assert.deepEqual(dashboard.allowed_mentions.parse,[]);
 });
 
 import {streamingTargets} from '../supabase/functions/discord-executor/streaming.ts';
