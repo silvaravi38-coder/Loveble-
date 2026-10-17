@@ -6,7 +6,7 @@ export const nexiumBrand={
  footer:'Nexium Store • Seu universo digital em um só lugar',
 };
 
-const sectionDivider={name:'━━━━━━━━━━━━━━━━━━━━',value:'\\u200b',inline:false};
+const sectionDivider={name:'━━━━━━━━━━━━━━━━━━━━',value:'\u200b',inline:false};
 export function styleNexiumMessagePayload(message:any){
  if(!message||typeof message!=='object'||!Array.isArray(message.embeds)||!message.embeds.length)return message;
  const embeds=message.embeds.map((source:any)=>{
