@@ -95,7 +95,7 @@ export async function botConfigAction(db:SupabaseClient,input:any,user:string,ex
  if(action==='toggle'){
   if(!['pix_enabled','grant_customer_role_on_paid','dm_customer_on_paid','dm_customer_on_delivery','notify_sale_paid'].includes(value)||!['on','off'].includes(argument))throw new BotError('UNSUPPORTED_ACTION');
   await execute('configurar',{[settingOptions[value]]:argument==='on'});
-  return botConfigPanel(db,input,user,value==='pix_enabled'?'pagamentos':value==='grant_customer_role_on_paid'?'cargos':'notificacoes','Configuração salva.');
+  return botConfigPanel(db,input,user,value==='pix_enabled'||value==='notify_sale_paid'?'pagamentos':value==='grant_customer_role_on_paid'?'cargos':'notificacoes','Configuração salva.');
  }
  if(action==='set'){
   if(!['role_customer_id','role_support_id','category_support_id','channel_logs_id','pix_log_channel_id'].includes(value)||input.data.values?.length!==1||!snowflake(input.data.values[0]))throw new BotError('INVALID_ID');
