@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {nexiumCommands,commandAliases} from '../supabase/functions/discord-executor/commands.ts';\nimport {styleNexiumMessagePayload} from '../supabase/functions/discord-interactions/brand.ts';
+import {nexiumCommands,commandAliases} from '../supabase/functions/discord-executor/commands.ts';
+import {styleNexiumMessagePayload} from '../supabase/functions/discord-interactions/brand.ts';
 import {webhookProof,sanitiseCharge,pixResponse,startPurchase} from '../supabase/functions/discord-interactions/payments.ts';
 import {deliverResponse,qrAttachment} from '../supabase/functions/discord-interactions/delivery.ts';
 import {route,eventAction,commandParts} from '../supabase/functions/discord-interactions/router.ts';
