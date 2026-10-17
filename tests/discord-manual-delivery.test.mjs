@@ -25,7 +25,7 @@ test('payment receipt is sent as an embed only to a private guild channel',async
   return method==='POST'?{id:'message-id'}:{guild_id:'guild',type:0,permission_overwrites:[{id:'guild',deny:'1024'}]};
  });
  assert.equal(calls[1].path,'/channels/payments/messages');
- assert.deepEqual(calls[1].body.embeds,[receipt]);
+ assert.deepEqual(calls[1].body.embeds,[receipt]);\n assert.equal(calls[1].body.components[0].components[0].label,'Acessar minha conta');
  assert.deepEqual(calls[1].body.allowed_mentions.parse,[]);
  assert.equal(updates[0].status,'sent');
 });
