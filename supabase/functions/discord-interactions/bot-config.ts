@@ -3,13 +3,14 @@ import {paymentConfigStatus} from './payment-config.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {actorFor,BotError,checked,row,button,linkButton,safeText,snowflake} from './api.ts';
 import {privateMessage} from './security.ts';
+import {verificationSummary,setVerificationResource,publishVerificationPanel} from './verification.ts';
 const prefix='nexium:botconfig:';
 const back=()=>row([{...button('Voltar à central',prefix+'tab:home',2),emoji:{name:'↩️'}}]);
-const icons:Record<string,string>={home:'🏠',marketplace:'🛍️',atendimento:'🎧',definicoes:'⚙️',automacoes:'🔄',moderacao:'🛡️',rendimento:'📊',tools:'🧰',permissoes:'👥',pagamentos:'💳',cargos:'👤',canais:'📂',notificacoes:'🔔',ia:'🤖',divulgacao:'📣',personalizacao:'🎨',oauth:'☁️'};
+const icons:Record<string,string>={home:'🏠',marketplace:'🛍️',atendimento:'🎧',definicoes:'⚙️',automacoes:'🔄',moderacao:'🛡️',rendimento:'📊',tools:'🧰',permissoes:'👥',pagamentos:'💳',cargos:'👤',canais:'📂',notificacoes:'🔔',ia:'🤖',divulgacao:'📣',personalizacao:'🎨',oauth:'☁️',verification:'🛡️'};
 const nav=(label:string,tab:string)=>({...button(label,prefix+'tab:'+tab,['marketplace','atendimento'].includes(tab)?1:2),emoji:{name:icons[tab]||'⚙️'}});
 const fields='pix_enabled,role_customer_id,role_support_id,category_support_id,channel_logs_id,pix_log_channel_id,notify_sale_paid,grant_customer_role_on_paid,dm_customer_on_paid,dm_customer_on_delivery';
 const settingOptions:Record<string,string>={pix_enabled:'pix',grant_customer_role_on_paid:'cargo_cliente_apos_pago',dm_customer_on_paid:'dm_pagamento',dm_customer_on_delivery:'dm_entrega',role_customer_id:'cliente',role_support_id:'suporte',category_support_id:'categoria_tickets',channel_logs_id:'logs',pix_log_channel_id:'canal_comprovantes',notify_sale_paid:'notify_sale_paid'};
-const pages=new Set(['home','marketplace','atendimento','definicoes','automacoes','moderacao','rendimento','tools','permissoes','pagamentos','cargos','canais','notificacoes','ia','divulgacao','personalizacao','oauth']);
+const pages=new Set(['home','marketplace','atendimento','definicoes','automacoes','moderacao','rendimento','tools','permissoes','pagamentos','cargos','canais','notificacoes','ia','divulgacao','personalizacao','oauth','verification']);
 const toggle=(label:string,field:string,enabled:boolean)=>button(`${label}: ${enabled?'Ligado':'Desligado'}`,prefix+`toggle:${field}:${enabled?'off':'on'}`,enabled?3:2);
 const roleSelect=(field:string,label:string)=>row([{type:6,custom_id:prefix+'set:'+field,placeholder:label,min_values:1,max_values:1}]);
 const channelSelect=(field:string,label:string,types:number[])=>row([{type:8,custom_id:prefix+'set:'+field,placeholder:label,channel_types:types,min_values:1,max_values:1}]);
@@ -38,11 +39,16 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
   components=[roleSelect('role_support_id','Escolher cargo de Suporte'),roleSelect('role_customer_id','Escolher cargo de Cliente'),channelSelect('category_support_id','Escolher categoria de tickets',[4]),row([call('Relatório da equipe','suportes')]),back()];
  }else if(page==='definicoes'){
   title='O que precisa configurar?';description='Gerencie pagamentos, cargos, canais e notificações. Escolha uma categoria para continuar.';
-  components=[row([nav('Formas de pagamento','pagamentos')]),row([nav('Cargos','cargos'),nav('Canais','canais')]),row([nav('Notificações','notificacoes')]),back()];
+  components=[row([nav('Formas de pagamento','pagamentos'),nav('Verificação do servidor','verification')]),row([nav('Cargos','cargos'),nav('Canais','canais')]),row([nav('Notificações','notificacoes')]),back()];
  }else if(page==='pagamentos'){
   const status=await paymentConfigStatus(db,input.guild_id);
   title='Formas de pagamento';description=`**Pix no Discord:** ${settings.pix_enabled?'Ligado':'Desligado'}\n**Provedor:** TurbofyPay\n**Conexão:** ${status.configured?'Configurada':'Aguardando credenciais'} • ${status.source}\n**Comprovantes:** ${settings.notify_sale_paid===false?'Desligados':'Ligados'}\n**Canal:** ${ref(settings.pix_log_channel_id||settings.channel_logs_id,'channel')}\nAvisos podem ir para um canal geral e mostram apenas produtos, valor e status — sem identificar cliente ou pedido.\n\nUse Configurar Pix para salvar ou substituir o Client ID e o Client Secret neste formulário privado. As credenciais não são exibidas novamente.\n\nO QR Code e o copia e cola são gerados para cada pedido. Pagamentos são confirmados pelo provedor. Para consultar uma cobrança, use /payments com o ID do pedido.`;
   components=[row([toggle('Vendas Pix','pix_enabled',!!settings.pix_enabled),toggle('Comprovantes','notify_sale_paid',settings.notify_sale_paid!==false)]),channelSelect('pix_log_channel_id','Escolher canal de comprovantes',[0,5]),row([button('Configurar Pix','nexium:payment-config:edit')]),back()];
+ }else if(page==='verification'){
+  const verify=await verificationSummary(db,input.guild_id);
+  title='Verificação do servidor';
+  description='Configure o canal onde os novos membros vão confirmar as regras e o cargo que recebem após a verificação.\n\n**Canal:** '+(verify.channel?'<#'+verify.channel+'>':'Não configurado')+'\n**Cargo liberado:** '+(verify.role?'<@&'+verify.role+'>':'Não configurado')+'\n\nO cargo precisa estar abaixo do bot e sem permissões administrativas. A verificação é feita pelo botão público; os membros não precisam digitar IDs.';
+  components=[channelSelect('verification_channel_id','Escolher canal de verificação',[0,5]),roleSelect('verification_role_id','Escolher cargo de membro verificado'),row([call('Publicar painel de verificação','verification-panel')]),back()];
  }else if(page==='cargos'){
   title='Configurar Cargos';description=`**Cliente:** ${ref(settings.role_customer_id)}\n**Suporte:** ${ref(settings.role_support_id)}\nEscolhas manuais de cargos são preservadas pelo organizador.`;
   components=[roleSelect('role_customer_id','Escolher cargo de Cliente'),roleSelect('role_support_id','Escolher cargo de Suporte'),row([toggle('Cliente após pagamento','grant_customer_role_on_paid',!!settings.grant_customer_role_on_paid)]),back()];
@@ -80,8 +86,8 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
   title='Rendimento';description='Receita de pedidos confirmados, custos e taxas registrados. Pedidos sem conciliação são identificados no relatório.';
   components=[row([call('Hoje','financeiro','today'),call('Últimos 7 dias','financeiro','7days'),call('Últimos 30 dias','financeiro','30days')]),row([call('Este mês','financeiro','month'),call('Total','financeiro','total')]),row([call('Ranking de produtos','ranking-produtos'),call('Relatório de suporte','suportes')]),back()];
  }else{
-  title='Ferramentas e backups';description='Escanear e salvar backups da estrutura do servidor. O preview mostra as mudanças propostas. A aplicação continua pelo comando /nexium-admin aplicar com o ID do preview revisado.\nBackups incluem estrutura e permissões; mensagens não são incluídas.';
-  components=[row([nav('Divulgação','divulgacao'),call('Checkers da loja','diagnostico')]),row([call('Escanear servidor','scan'),call('Backup estrutural','backup'),call('Preview organizador','preview')]),row([linkButton('Admin e logs','https://nexium-store.vercel.app/admin')]),back()];
+  title='Ferramentas e backups';description='Sincronize os comandos do servidor e escaneie ou salve backups da estrutura. O preview mostra as mudanças propostas. A aplicação continua pelo comando /nexium-admin aplicar com o ID do preview revisado.\nBackups incluem estrutura e permissões; mensagens não são incluídas.';
+  components=[row([call('Atualizar comandos Discord','sync-commands'),nav('Divulgação','divulgacao'),call('Checkers da loja','diagnostico')]),row([call('Escanear servidor','scan'),call('Backup estrutural','backup'),call('Preview organizador','preview')]),row([linkButton('Admin e logs','https://nexium-store.vercel.app/admin')]),back()];
  }
  const userInfo=input.member?.user;
  const avatar=snowflake(userInfo?.id)&&/^[a-f0-9_]+$/i.test(userInfo?.avatar||'')?`https://cdn.discordapp.com/avatars/${userInfo.id}/${userInfo.avatar}.png?size=128`:undefined;
@@ -98,13 +104,15 @@ export async function botConfigAction(db:SupabaseClient,input:any,user:string,ex
   return botConfigPanel(db,input,user,value==='pix_enabled'||value==='notify_sale_paid'?'pagamentos':value==='grant_customer_role_on_paid'?'cargos':'notificacoes','Configuração salva.');
  }
  if(action==='set'){
-  if(!['role_customer_id','role_support_id','category_support_id','channel_logs_id','pix_log_channel_id'].includes(value)||input.data.values?.length!==1||!snowflake(input.data.values[0]))throw new BotError('INVALID_ID');
+  if(!['role_customer_id','role_support_id','category_support_id','channel_logs_id','pix_log_channel_id','verification_channel_id','verification_role_id'].includes(value)||input.data.values?.length!==1||!snowflake(input.data.values[0]))throw new BotError('INVALID_ID');
+  if(value.startsWith('verification_')){await setVerificationResource(db,input,user,value,input.data.values[0]);return botConfigPanel(db,input,user,'verification','Configuração salva.');}
   await execute('configurar',{[settingOptions[value]]:input.data.values[0]});
   return botConfigPanel(db,input,user,['channel_logs_id','pix_log_channel_id','category_support_id'].includes(value)?(value==='pix_log_channel_id'?'pagamentos':'canais'):'cargos','Configuração salva.');
  }
  if(action==='run'){
-  if(!['estoque','paineis','painel-estoque','canais-vendas','suportes','mensagens','lock','unlock','financeiro','ranking-produtos','scan','backup','preview','ia','diagnostico'].includes(value))throw new BotError('UNSUPPORTED_ACTION');
+  if(!['estoque','paineis','painel-estoque','canais-vendas','suportes','mensagens','lock','unlock','financeiro','ranking-produtos','scan','backup','preview','ia','diagnostico','verification-panel','sync-commands'].includes(value))throw new BotError('UNSUPPORTED_ACTION');
   if(argument&&!((value==='financeiro'&&['today','month','total','7days','30days'].includes(argument))||(value==='ia'&&['on','off','suggest','automatic'].includes(argument))))throw new BotError('UNSUPPORTED_ACTION');
+  if(value==='verification-panel')return publishVerificationPanel(db,input,user);
   const result=await execute(value,value==='financeiro'?{periodo:argument||'total'}:value==='ia'?['suggest','automatic'].includes(argument)?{modo:argument}:{ligada:argument==='on'}:{});
   if(value==='ia')return botConfigPanel(db,input,user,'ia','Configuração da IA salva.');
   return {...result,components:[...(result.components||[]),back()]};

@@ -9,6 +9,7 @@ export async function restockModal(db:SupabaseClient,input:any,userId:string) {
  if(input.type===3&&String(input.data?.custom_id).startsWith('nexium:stock:edit:')){const id=String(input.data.custom_id).split(':')[3];if(!uuid(id))throw new BotError('INVALID_ID');return restockModal(db,{...input,type:2,data:{name:'gerenciar_stock',options:[{name:'acao',value:'repor'},{name:'produto',value:id}]}},userId);}
  const {command,sub,options}=commandParts(input);if(input.type!==2||command!=='nexium-admin'||sub!=='restock')return null;
  const actor=await actorFor(db,userId);if(actor.role!=='admin')throw new BotError('FORBIDDEN');
+ if(!options.produto)return null;
  const product=await productFor(db,options.produto);
  if(options.acao==='manual'||!product.automatic_delivery)return manualQuantityModal(product);
  return {type:9,data:{custom_id:`nexium:restock:${product.id}`,title:'Repor estoque Nexium',components:[{type:1,components:[{type:4,custom_id:'units',label:'Uma unidade/chave real por linha (máximo 50)',style:2,required:true,min_length:1,max_length:4000}]}]}};
