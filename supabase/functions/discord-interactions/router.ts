@@ -13,7 +13,7 @@ import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,actorFor,discord,productFor,uuid,snowflake,safeText,audit,fortalezaMonthStart} from './api.ts';
 import {commandAliases,commandLabels} from '../discord-executor/commands.ts';
 import {adminDashboard,announce,refreshStockRequestPanel,profileCard,productRanking} from './shortcuts.ts';
-import {privateMessage,orderMessage} from './security.ts';
+import {privateMessage,privateEmbed,orderMessage} from './security.ts';
 import {catalogue,productDetails,publishPanel} from './catalog.ts';
 import {startPurchase,paymentStatus,reconcilePayment} from './payments.ts';
 import {previewChannelControl,applyChannelControl} from './moderation.ts';
@@ -72,7 +72,7 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
   else panel=checked(await db.from('discord_sales_panels').insert({...draft,slug:`discord-${input.id}`,guild_id:input.guild_id,channel_id:input.channel_id,panel_kind:sub==='painel-tickets'?'tickets':'sales',active:true,created_by:actor.id}).select('id').single());
   return panelJob(db,input.guild_id,actor.id,'publish',panel.id,()=>publishPanel(db,input.guild_id,input.channel_id,actor.id,panel.id));
  }
- if(sub==='paineis'){const panels=checked(await db.from('discord_sales_panels').select('id,name,channel_id,active,sync_status').eq('guild_id',input.guild_id).limit(20)) as any[];return privateMessage(panels.map(p=>`${safeText(p.name,80)} — ${p.id} — ${p.sync_status}`).join('\n')||'Nenhum painel cadastrado.');}
+ if(sub==='paineis'){const panels=checked(await db.from('discord_sales_panels').select('id,name,channel_id,active,sync_status').eq('guild_id',input.guild_id).order('name').limit(20)) as any[];if(!panels.length)return privateEmbed('🗂️ Painéis de venda','Ainda não há painéis cadastrados.\n\nUse `/nexium-admin painel` para criar um painel de vendas.');const states:Record<string,string>={synced:'✅ Publicado',unpublished:'⏸️ Despublicado',pending:'🕓 Pendente',failed:'⚠️ Verificar'};const fields=panels.map(p=>({name:`${p.active?'🟢':'⚪'} ${safeText(p.name,80)}`,value:`**Status:** ${states[p.sync_status]||'🔎 '+safeText(p.sync_status,30)}\n**Canal:** <#${p.channel_id}>\n**ID:** \`${p.id}\``,inline:false}));return privateEmbed(`🗂️ Painéis de venda • ${panels.length}`, 'Confira o canal, o status e o identificador de cada painel.',fields);}
  if(sub==='sincronizar'||sub==='despublicar')return panelJob(db,input.guild_id,actor.id,sub==='despublicar'?'unpublish':'sync',o.painel,()=>publishPanel(db,input.guild_id,input.channel_id,actor.id,o.painel,sub==='despublicar'));
  if(['scan','preview','backup','aplicar'].includes(sub)){if(sub==='aplicar'&&!uuid(o.preview))throw new BotError('INVALID_ID');return executorJob(db,input.guild_id,actor.id,sub==='aplicar'?'apply':sub,o.estrategia||'reuse',o.preview);}
  if(sub==='configurar'){
