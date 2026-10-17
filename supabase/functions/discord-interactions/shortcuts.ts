@@ -1,10 +1,10 @@
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {actorFor,audit,BotError,checked,discord,linkButton,row,safeText,snowflake} from './api.ts';
-import {privateMessage,applicationId} from './security.ts';
+import {privateMessage,privateEmbed,applicationId} from './security.ts';
 import {productRequestPanel} from './product-requests.ts';
 import {syncInformationMessage} from '../discord-executor/information.ts';
 
-export function adminDashboard(){return {...privateMessage('Central administrativa Nexium\nSelecione uma consulta abaixo. Para alterar cargos, canais ou Pix, use /botconfig com as opções desejadas.\nProdutos e variantes: /gerenciar_produto\nReposição: /gerenciar_stock acao:repor produto:nome\nCupons: /cupom • Anúncios: /anunciar'),components:[row([{type:3,custom_id:'nexium:admin-menu:v1',placeholder:'Selecione uma ferramenta administrativa',options:[{label:'Estoque',value:'estoque',description:'Consultar unidades disponíveis, sem mostrar chaves'},{label:'Painéis',value:'paineis',description:'Consultar painéis e seus IDs'},{label:'Financeiro',value:'financeiro',description:'Receita, custos e produtos mais vendidos'}]}]),row([linkButton('Abrir administração da loja','https://nexium-store.vercel.app/admin')])]};}
+export function adminDashboard(){return {...privateEmbed('🛠️ Central administrativa Nexium','Bem-vindo ao painel de gestão. Escolha uma ferramenta no menu abaixo.\n\n**🛍️ Produtos e estoque**\n`/gerenciar_produto` • Gerencie produtos e variantes.\n`/gerenciar_stock acao:repor produto:nome` • Reponha o estoque.\n\n**💳 Vendas e divulgação**\n`/cupom` • Cupons de desconto.\n`/anunciar` • Publique um anúncio.\n\n**⚙️ Configurações**\nUse `/botconfig` para ajustar cargos, canais e pagamentos.'),components:[row([{type:3,custom_id:'nexium:admin-menu:v1',placeholder:'🧭 Escolha uma área administrativa',options:[{label:'📦 Estoque',value:'estoque',description:'Consultar unidades disponíveis com segurança'},{label:'🗂️ Painéis',value:'paineis',description:'Ver painéis, canais e status de publicação'},{label:'💰 Financeiro',value:'financeiro',description:'Receita, custos e produtos mais vendidos'}]}]),row([linkButton('🌐 Abrir administração da loja','https://nexium-store.vercel.app/admin')])]};}
 export async function profileCard(db:SupabaseClient,user:string){
  const actor=await actorFor(db,user);
  const count=await db.from('orders').select('id',{count:'exact',head:true}).eq('user_id',actor.id);
