@@ -15,3 +15,25 @@ test('delivery alerts never post customer details to a public channel',async()=>
  await sendNotification(db,{id,kind:'log',channel_id:'channel',guild_id:'guild',attempts:1,payload:{type:'manual_delivery'}},async(path,method)=>{calls.push(method||'GET');return{guild_id:'guild',type:0,permission_overwrites:[]}});
  assert.deepEqual(calls,['GET']);assert.equal(updates[0].error_code,'PRIVATE_DELIVERY_CHANNEL_REQUIRED');
 });
+
+test('payment receipt is sent as an embed only to a private guild channel',async()=>{
+ const updates=[],calls=[];const receipt={title:'✅ Compra realizada',fields:[{name:'VALOR PAGO',value:'R$ 12,50'}]};
+ const db={from(){return{update(v){updates.push(v);return this},eq:async()=>({error:null})}}};
+ const record={id,kind:'log',channel_id:'payments',guild_id:'guild',attempts:1,content:'Comprovante',payload:{type:'payment_receipt',embed:receipt,components:[{type:1,components:[{type:2,label:'Acessar minha conta',style:5,url:'https://nexium-store.vercel.app'}]}]}};
+ await sendNotification(db,record,async(path,method,body)=>{
+  calls.push({path,method,body});
+  return method==='POST'?{id:'message-id'}:{guild_id:'guild',type:0,permission_overwrites:[{id:'guild',deny:'1024'}]};
+ });
+ assert.equal(calls[1].path,'/channels/payments/messages');
+ assert.deepEqual(calls[1].body.embeds,[receipt]);
+ assert.equal(calls[1].body.components[0].components[0].label,'Acessar minha conta');
+ assert.deepEqual(calls[1].body.allowed_mentions.parse,[]);
+ assert.equal(updates[0].status,'sent');
+});
+test('payment receipt is not sent to a public channel',async()=>{
+ const updates=[],calls=[];const db={from(){return{update(v){updates.push(v);return this},eq:async()=>({error:null})}}};
+ await sendNotification(db,{id,kind:'log',channel_id:'public',guild_id:'guild',attempts:1,content:'Comprovante',payload:{type:'payment_receipt',embed:{title:'Recibo'}}},async(path,method)=>{calls.push(method||'GET');return{guild_id:'guild',type:0,permission_overwrites:[]}});
+ assert.deepEqual(calls,['GET']);
+ assert.equal(updates[0].status,'failed');
+ assert.equal(updates[0].error_code,'PRIVATE_DELIVERY_CHANNEL_REQUIRED');
+});

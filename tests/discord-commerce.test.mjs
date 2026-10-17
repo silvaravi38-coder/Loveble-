@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {nexiumCommands,commandAliases} from '../supabase/functions/discord-executor/commands.ts';
+import {styleNexiumMessagePayload} from '../supabase/functions/discord-interactions/brand.ts';
 import {webhookProof,sanitiseCharge,pixResponse,startPurchase} from '../supabase/functions/discord-interactions/payments.ts';
 import {deliverResponse,qrAttachment} from '../supabase/functions/discord-interactions/delivery.ts';
 import {route,eventAction,commandParts} from '../supabase/functions/discord-interactions/router.ts';
@@ -475,4 +476,15 @@ test('closed private ticket thread can be deleted while public or foreign thread
  let removed=false;const channel={id:'thread',guild_id:'guild',type:12,owner_id:ticketBotId,parent_id:'parent',name:'suporte-aaaaaaaa'};
  await deleteClosedTicketChannel(view,'guild',async(_,method='GET')=>{if(method==='DELETE')removed=true;return channel;});assert.equal(removed,true);
  for(const bad of [{...channel,type:11},{...channel,owner_id:'another'},{...channel,name:'unrelated'}])await assert.rejects(deleteClosedTicketChannel(view,'guild',async()=>bad),e=>e.code==='PROTECTED_TICKET_CHANNEL');
+});
+
+test('all outbound embeds share Nexium identity, section dividers and preserve controls',()=>{
+ const input={content:null,components:[{type:1,components:[{type:2,label:'Continuar'}]}],embeds:[{title:'Central',description:'Escolha uma ação.',fields:[{name:'Vendas',value:'Ativas'},{name:'Suporte',value:'Disponível'}]}]};
+ const output=styleNexiumMessagePayload(input);
+ assert.equal(output.embeds[0].author.name,'NEXIUM STORE');
+ assert.equal(output.embeds[0].color,0x5865f2);
+ assert.equal(output.embeds[0].footer.text,'NEXIUM STORE • Seu universo digital em um só lugar');
+ assert.equal(output.embeds[0].fields.filter(field=>field.name.startsWith('━')).length,2);
+ assert.deepEqual(output.components,input.components);
+ assert.equal(output.embeds[0].title,'Central');
 });

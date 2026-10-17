@@ -78,11 +78,12 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
  if(sub==='configurar'){
   if(!Object.keys(o).length)return botConfigPanel(db,input,userId);
   const data:Record<string,unknown>={guild_id:input.guild_id,updated_by:actor.id};
-  for(const [option,field] of [['pix','pix_enabled'],['cargo_cliente_apos_pago','grant_customer_role_on_paid'],['dm_pagamento','dm_customer_on_paid'],['dm_entrega','dm_customer_on_delivery']])if(o[option]!==undefined)data[field]=o[option];
-  if(o.logs){const c=await discord(`/channels/${o.logs}`);if(c.guild_id!==input.guild_id||![0,5].includes(c.type))throw new BotError('WRONG_PANEL_CHANNEL');data.channel_logs_id=o.logs;}
+  for(const [option,field] of [['pix','pix_enabled'],['cargo_cliente_apos_pago','grant_customer_role_on_paid'],['dm_pagamento','dm_customer_on_paid'],['dm_entrega','dm_customer_on_delivery'],['notify_sale_paid','notify_sale_paid']])if(o[option]!==undefined)data[field]=o[option];
+  if(o.logs){const c=await discord(`/channels/${o.logs}`);if(c.guild_id!==input.guild_id||![0,5].includes(c.type))throw new BotError('WRONG_PANEL_CHANNEL');data.channel_logs_id=o.logs;} 
+  if(o.canal_comprovantes){const c=await discord(`/channels/${o.canal_comprovantes}`);if(c.guild_id!==input.guild_id||![0,5].includes(c.type))throw new BotError('WRONG_PANEL_CHANNEL');data.pix_log_channel_id=o.canal_comprovantes;}
   if(o.categoria_tickets){const c=await discord(`/channels/${o.categoria_tickets}`);if(c.guild_id!==input.guild_id||c.type!==4)throw new BotError('INVALID_TICKET_CATEGORY');data.category_support_id=o.categoria_tickets;}
   if(o.cliente||o.suporte){const roles=await discord(`/guilds/${input.guild_id}/roles`);for(const [option,field] of [['cliente','role_customer_id'],['suporte','role_support_id']]){if(o[option]){const role=roles.find((r:any)=>r.id===o[option]);if(!role||role.managed||role.id===input.guild_id)throw new BotError('PROTECTED_ROLE');data[field]=role.id;}}}
-  if(['cliente','suporte','logs','categoria_tickets'].some(key=>o[key]!==undefined))data.id_mode='manual';
+  if(['cliente','suporte','logs','canal_comprovantes','categoria_tickets'].some(key=>o[key]!==undefined))data.id_mode='manual';
   const previous=checked(await db.from('discord_bot_settings').select('id').eq('guild_id',input.guild_id).maybeSingle());
   if(previous)checked(await db.from('discord_bot_settings').update(data).eq('id',previous.id));else checked(await db.from('discord_bot_settings').insert(data));
   await audit(db,input.guild_id,actor.id,'bot_configured',input.guild_id,data);return privateMessage('Configurações salvas. IDs validados no Discord.');

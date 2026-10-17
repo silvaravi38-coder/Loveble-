@@ -1,7 +1,8 @@
 import {sendWithRetry} from './delivery-retry.js';
+import {styleNexiumMessagePayload} from './brand.ts';
 export type PrivateFile={name:string;content:Uint8Array|string;type:string};
 export async function deliverResponse(url:string,message:any,send:typeof fetch=fetch) {
- const {files,afterDelivery,...payload}=message;
+ const {files,afterDelivery,...payload}=styleNexiumMessagePayload(message);
  if(!files?.length)return sendWithRetry(url,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)},send,{timeoutMs:8000});
  const form=new FormData();payload.attachments=files.map((file:PrivateFile,id:number)=>({id,filename:file.name}));
  form.set('payload_json',JSON.stringify(payload));

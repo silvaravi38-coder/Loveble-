@@ -7,8 +7,8 @@ const prefix='nexium:botconfig:';
 const back=()=>row([{...button('Voltar à central',prefix+'tab:home',2),emoji:{name:'↩️'}}]);
 const icons:Record<string,string>={home:'🏠',marketplace:'🛍️',atendimento:'🎧',definicoes:'⚙️',automacoes:'🔄',moderacao:'🛡️',rendimento:'📊',tools:'🧰',permissoes:'👥',pagamentos:'💳',cargos:'👤',canais:'📂',notificacoes:'🔔',ia:'🤖',divulgacao:'📣',personalizacao:'🎨',oauth:'☁️'};
 const nav=(label:string,tab:string)=>({...button(label,prefix+'tab:'+tab,['marketplace','atendimento'].includes(tab)?1:2),emoji:{name:icons[tab]||'⚙️'}});
-const fields='pix_enabled,role_customer_id,role_support_id,category_support_id,channel_logs_id,grant_customer_role_on_paid,dm_customer_on_paid,dm_customer_on_delivery';
-const settingOptions:Record<string,string>={pix_enabled:'pix',grant_customer_role_on_paid:'cargo_cliente_apos_pago',dm_customer_on_paid:'dm_pagamento',dm_customer_on_delivery:'dm_entrega',role_customer_id:'cliente',role_support_id:'suporte',category_support_id:'categoria_tickets',channel_logs_id:'logs'};
+const fields='pix_enabled,role_customer_id,role_support_id,category_support_id,channel_logs_id,pix_log_channel_id,notify_sale_paid,grant_customer_role_on_paid,dm_customer_on_paid,dm_customer_on_delivery';
+const settingOptions:Record<string,string>={pix_enabled:'pix',grant_customer_role_on_paid:'cargo_cliente_apos_pago',dm_customer_on_paid:'dm_pagamento',dm_customer_on_delivery:'dm_entrega',role_customer_id:'cliente',role_support_id:'suporte',category_support_id:'categoria_tickets',channel_logs_id:'logs',pix_log_channel_id:'canal_comprovantes',notify_sale_paid:'notify_sale_paid'};
 const pages=new Set(['home','marketplace','atendimento','definicoes','automacoes','moderacao','rendimento','tools','permissoes','pagamentos','cargos','canais','notificacoes','ia','divulgacao','personalizacao','oauth']);
 const toggle=(label:string,field:string,enabled:boolean)=>button(`${label}: ${enabled?'Ligado':'Desligado'}`,prefix+`toggle:${field}:${enabled?'off':'on'}`,enabled?3:2);
 const roleSelect=(field:string,label:string)=>row([{type:6,custom_id:prefix+'set:'+field,placeholder:label,min_values:1,max_values:1}]);
@@ -41,14 +41,14 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
   components=[row([nav('Formas de pagamento','pagamentos')]),row([nav('Cargos','cargos'),nav('Canais','canais')]),row([nav('Notificações','notificacoes')]),back()];
  }else if(page==='pagamentos'){
   const status=await paymentConfigStatus(db,input.guild_id);
-  title='Formas de pagamento';description=`**Pix no Discord:** ${settings.pix_enabled?'Ligado':'Desligado'}\n**Provedor:** TurbofyPay\n**Conexão:** ${status.configured?'Configurada':'Aguardando credenciais'} • ${status.source}\n\nUse Configurar Pix para salvar ou substituir o Client ID e o Client Secret neste formulário privado. As credenciais não são exibidas novamente.\n\nO QR Code e o copia e cola são gerados para cada pedido. Pagamentos são confirmados pelo provedor. Para consultar uma cobrança, use /payments com o ID do pedido.`;
-  components=[row([toggle('Vendas Pix','pix_enabled',!!settings.pix_enabled)]),row([button('Configurar Pix','nexium:payment-config:edit')]),back()];
+  title='Formas de pagamento';description=`**Pix no Discord:** ${settings.pix_enabled?'Ligado':'Desligado'}\n**Provedor:** TurbofyPay\n**Conexão:** ${status.configured?'Configurada':'Aguardando credenciais'} • ${status.source}\n**Comprovantes:** ${settings.notify_sale_paid===false?'Desligados':'Ligados'}\n**Canal:** ${ref(settings.pix_log_channel_id||settings.channel_logs_id,'channel')}\n\nUse Configurar Pix para salvar ou substituir o Client ID e o Client Secret neste formulário privado. As credenciais não são exibidas novamente.\n\nO QR Code e o copia e cola são gerados para cada pedido. Pagamentos são confirmados pelo provedor. Para consultar uma cobrança, use /payments com o ID do pedido.`;
+  components=[row([toggle('Vendas Pix','pix_enabled',!!settings.pix_enabled),toggle('Comprovantes','notify_sale_paid',settings.notify_sale_paid!==false)]),channelSelect('pix_log_channel_id','Escolher canal de comprovantes',[0,5]),row([button('Configurar Pix','nexium:payment-config:edit')]),back()];
  }else if(page==='cargos'){
   title='Configurar Cargos';description=`**Cliente:** ${ref(settings.role_customer_id)}\n**Suporte:** ${ref(settings.role_support_id)}\nEscolhas manuais de cargos são preservadas pelo organizador.`;
   components=[roleSelect('role_customer_id','Escolher cargo de Cliente'),roleSelect('role_support_id','Escolher cargo de Suporte'),row([toggle('Cliente após pagamento','grant_customer_role_on_paid',!!settings.grant_customer_role_on_paid)]),back()];
  }else if(page==='canais'){
-  title='Configurar Canais';description=`**Logs:** ${ref(settings.channel_logs_id,'channel')}\n**Categoria de tickets:** ${ref(settings.category_support_id,'channel')}\nSelecione canais deste servidor.`;
-  components=[channelSelect('channel_logs_id','Escolher canal de logs',[0,5]),channelSelect('category_support_id','Escolher categoria de tickets',[4]),back()];
+  title='Configurar Canais';description=`**Logs gerais:** ${ref(settings.channel_logs_id,'channel')}\n**Comprovantes:** ${ref(settings.pix_log_channel_id||settings.channel_logs_id,'channel')}\n**Categoria de tickets:** ${ref(settings.category_support_id,'channel')}\nSelecione canais deste servidor.`;
+  components=[channelSelect('channel_logs_id','Escolher canal de logs',[0,5]),channelSelect('pix_log_channel_id','Escolher canal de comprovantes',[0,5]),channelSelect('category_support_id','Escolher categoria de tickets',[4]),back()];
  }else if(page==='notificacoes'){
   title='Notificações';description=`**DM de pagamento:** ${settings.dm_customer_on_paid?'Ligada':'Desligada'}\n**DM de entrega:** ${settings.dm_customer_on_delivery?'Ligada':'Desligada'}\nAvisos usam pagamentos e entregas confirmados. O cliente pode bloquear mensagens diretas no Discord.`;
   components=[row([toggle('DM pagamento','dm_customer_on_paid',!!settings.dm_customer_on_paid),toggle('DM entrega','dm_customer_on_delivery',!!settings.dm_customer_on_delivery)]),back()];
@@ -93,14 +93,14 @@ export async function botConfigAction(db:SupabaseClient,input:any,user:string,ex
  if(action==='select'){if(value!=='automation'||input.data.values?.length!==1||!['divulgacao','notificacoes','moderacao','ia'].includes(input.data.values[0]))throw new BotError('UNSUPPORTED_ACTION');return botConfigPanel(db,input,user,input.data.values[0]);}
  if(action==='tab')return botConfigPanel(db,input,user,value);
  if(action==='toggle'){
-  if(!['pix_enabled','grant_customer_role_on_paid','dm_customer_on_paid','dm_customer_on_delivery'].includes(value)||!['on','off'].includes(argument))throw new BotError('UNSUPPORTED_ACTION');
+  if(!['pix_enabled','grant_customer_role_on_paid','dm_customer_on_paid','dm_customer_on_delivery','notify_sale_paid'].includes(value)||!['on','off'].includes(argument))throw new BotError('UNSUPPORTED_ACTION');
   await execute('configurar',{[settingOptions[value]]:argument==='on'});
-  return botConfigPanel(db,input,user,value==='pix_enabled'?'pagamentos':value==='grant_customer_role_on_paid'?'cargos':'notificacoes','Configuração salva.');
+  return botConfigPanel(db,input,user,value==='pix_enabled'||value==='notify_sale_paid'?'pagamentos':value==='grant_customer_role_on_paid'?'cargos':'notificacoes','Configuração salva.');
  }
  if(action==='set'){
-  if(!['role_customer_id','role_support_id','category_support_id','channel_logs_id'].includes(value)||input.data.values?.length!==1||!snowflake(input.data.values[0]))throw new BotError('INVALID_ID');
+  if(!['role_customer_id','role_support_id','category_support_id','channel_logs_id','pix_log_channel_id'].includes(value)||input.data.values?.length!==1||!snowflake(input.data.values[0]))throw new BotError('INVALID_ID');
   await execute('configurar',{[settingOptions[value]]:input.data.values[0]});
-  return botConfigPanel(db,input,user,value==='channel_logs_id'?'canais':value==='category_support_id'?'canais':'cargos','Configuração salva.');
+  return botConfigPanel(db,input,user,['channel_logs_id','pix_log_channel_id','category_support_id'].includes(value)?(value==='pix_log_channel_id'?'pagamentos':'canais'):'cargos','Configuração salva.');
  }
  if(action==='run'){
   if(!['estoque','paineis','painel-estoque','canais-vendas','suportes','mensagens','lock','unlock','financeiro','ranking-produtos','scan','backup','preview','ia','diagnostico'].includes(value))throw new BotError('UNSUPPORTED_ACTION');
