@@ -12,9 +12,9 @@ import {createSalesChannels} from './sales-channels.ts';
 import {verificationAction} from './verification.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,actorFor,discord,productFor,uuid,snowflake,safeText,audit,fortalezaMonthStart,row,linkButton} from './api.ts';
-import {commandAliases,commandLabels} from '../discord-executor/commands.ts';
+import {commandAliases,commandLabels,nexiumCommands} from '../discord-executor/commands.ts';
 import {adminDashboard,announce,refreshStockRequestPanel,profileCard,productRanking} from './shortcuts.ts';
-import {privateMessage,privateEmbed,orderMessage} from './security.ts';
+import {privateMessage,privateEmbed,orderMessage,applicationId} from './security.ts';
 import {catalogue,productDetails,publishPanel} from './catalog.ts';
 import {startPurchase,paymentStatus,reconcilePayment} from './payments.ts';
 import {previewChannelControl,applyChannelControl} from './moderation.ts';
@@ -42,6 +42,7 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
  const actor=await actorFor(db,userId);if(actor.role!=='admin')throw new BotError('FORBIDDEN');
  if(sub==='checklist')return setupChecklist(db,input,userId);
  if(sub==='canais-vendas')return createSalesChannels(db,input.guild_id,actor.id);
+ if(sub==='sync-commands'){const result=await discord('/applications/'+applicationId+'/guilds/'+input.guild_id+'/commands','PUT',nexiumCommands);await audit(db,input.guild_id,actor.id,'discord_commands_synced',input.guild_id,{count:Array.isArray(result)?result.length:0});return privateEmbed('✅ Comandos atualizados','A lista de comandos deste servidor foi sincronizada com o painel Nexium. Agora `/gerenciar_produto` e `/gerenciar_stock` abrem menus de seleção, sem exigir produto digitado.');}
  if(sub==='store-ai')return storeAi(db,input,userId,o.texto);
  if(sub==='product-delivery')return configureProductDelivery(db,input,userId,o);
  if(sub==='diagnostico')return storeDiagnostics(db,input.guild_id);
