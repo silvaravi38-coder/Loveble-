@@ -36,18 +36,16 @@ export async function fulfilPaid(db:SupabaseClient,orderId:string) {
   const money=(value:unknown)=>Number(value||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const cart=items.map(item=>({
    name:safeText(item.product_name,100)+(item.variant_name?' • '+safeText(item.variant_name,70):''),
-   value:`${Number(item.quantity)||1}x • ${money(Number(item.unit_price)*(Number(item.quantity)||1))}`,
-   inline:false
+   value:`${Number(item.quantity)||1}x • ${money(Number(item.unit_price)*(Number(item.quantity)||1))}`
   })).slice(0,10);
-  const receipt={title:'✅ Compra realizada',description:'Pagamento confirmado pelo provedor PIX.',color:0x3978e8,fields:[
-   {name:'Cliente',value:`<@${request.discord_user_id}>`,inline:true},
-   {name:'Status',value:'🟢 PAGO',inline:true},
-   {name:'Pedido',value:`#${orderId.slice(0,8).toUpperCase()}`,inline:true},
-   {name:'🛒 Carrinho',value:'\u200b',inline:false},
-   ...(cart.length?cart:[{name:'Produto',value:'Pedido da Nexium Store',inline:false}]),
-   {name:'VALOR PAGO',value:`**${money(ord.total)}**`,inline:false}
-  ],footer:{text:'NEXIUM STORE • Recibo de compra'},timestamp:payment?.paid_at||new Date().toISOString()};
-  notifications.push({dedupe_key:`paid-log:${orderId}`,guild_id:request.guild_id,kind:'log',channel_id:logChannel,content:'🧾 Comprovante de pagamento confirmado.',payload:{type:'payment_receipt',embed:receipt}});
+  const receipt={author:{name:'NEXIUM STORE • CENTRAL DE PEDIDOS'},title:'🎉 Compra realizada',description:'Seu pagamento foi confirmado com sucesso! Confira abaixo os detalhes do seu pedido.',color:0x5865f2,fields:[
+   {name:'━━━━━━━━━━━━━━━━━━━━',value:'\u200b',inline:false},
+   {name:'🛍️ Detalhes da compra',value:`**Cliente:** <@${request.discord_user_id}>\n**Pedido:** #${orderId.slice(0,8).toUpperCase()}\n\n${cart.length?cart.map(item=>`**${item.name}**\n${item.value}`).join('\n\n'):'Pedido da Nexium Store'}`,inline:false},
+   {name:'━━━━━━━━━━━━━━━━━━━━',value:'\u200b',inline:false},
+   {name:'💳 Pagamento',value:`**Forma de pagamento**\nPIX\n\n**Status**\n🟢 Aprovado\n\n**VALOR PAGO**\n**${money(ord.total)}**`,inline:false}
+  ],footer:{text:'NEXIUM STORE • Obrigado pela preferência!'},timestamp:payment?.paid_at||new Date().toISOString()};
+  const receiptComponents=[row([linkButton('Acessar minha conta','https://nexium-store.vercel.app')])];
+  notifications.push({dedupe_key:`paid-log:${orderId}`,guild_id:request.guild_id,kind:'log',channel_id:logChannel,content:'🧾 Comprovante de pagamento confirmado.',payload:{type:'payment_receipt',embed:receipt,components:receiptComponents}});
  }
  if(notifications.length)checked(await db.from('discord_bot_outbox').upsert(notifications,{onConflict:'dedupe_key',ignoreDuplicates:true}));
  if(ord.status==='delivered'){const processed=checked(await db.from('discord_audit_events').select('id').eq('action','delivery_notification_processed').eq('entity_id',orderId).limit(1));if(!processed.length)await audit(db,request.guild_id,ord.user_id,'delivery_notification_processed',orderId);}
