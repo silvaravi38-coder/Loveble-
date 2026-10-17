@@ -13,7 +13,8 @@ export function styleNexiumMessagePayload(message:any){
   const embed={...source};
   if(Array.isArray(embed.fields)&&embed.fields.length){
    const fields:any[]=[];
-   const isDivider=(field:any)=>field?.name===sectionDivider.name;\n   if(embed.description&&!isDivider(embed.fields[0]))fields.push(sectionDivider);
+   const isDivider=(field:any)=>field?.name===sectionDivider.name;
+   if(embed.description&&!isDivider(embed.fields[0]))fields.push(sectionDivider);
    embed.fields.forEach((field:any,index:number)=>{
     if(index>0&&!embed.fields[index-1]?.inline&&!field.inline&&!isDivider(embed.fields[index-1])&&!isDivider(field))fields.push(sectionDivider);
     fields.push(field);
