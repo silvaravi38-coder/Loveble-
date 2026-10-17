@@ -86,8 +86,8 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
   title='Rendimento';description='Receita de pedidos confirmados, custos e taxas registrados. Pedidos sem conciliação são identificados no relatório.';
   components=[row([call('Hoje','financeiro','today'),call('Últimos 7 dias','financeiro','7days'),call('Últimos 30 dias','financeiro','30days')]),row([call('Este mês','financeiro','month'),call('Total','financeiro','total')]),row([call('Ranking de produtos','ranking-produtos'),call('Relatório de suporte','suportes')]),back()];
  }else{
-  title='Ferramentas e backups';description='Escanear e salvar backups da estrutura do servidor. O preview mostra as mudanças propostas. A aplicação continua pelo comando /nexium-admin aplicar com o ID do preview revisado.\nBackups incluem estrutura e permissões; mensagens não são incluídas.';
-  components=[row([nav('Divulgação','divulgacao'),call('Checkers da loja','diagnostico')]),row([call('Escanear servidor','scan'),call('Backup estrutural','backup'),call('Preview organizador','preview')]),row([linkButton('Admin e logs','https://nexium-store.vercel.app/admin')]),back()];
+  title='Ferramentas e backups';description='Sincronize os comandos do servidor e escaneie ou salve backups da estrutura. O preview mostra as mudanças propostas. A aplicação continua pelo comando /nexium-admin aplicar com o ID do preview revisado.\nBackups incluem estrutura e permissões; mensagens não são incluídas.';
+  components=[row([call('Atualizar comandos Discord','sync-commands'),nav('Divulgação','divulgacao'),call('Checkers da loja','diagnostico')]),row([call('Escanear servidor','scan'),call('Backup estrutural','backup'),call('Preview organizador','preview')]),row([linkButton('Admin e logs','https://nexium-store.vercel.app/admin')]),back()];
  }
  const userInfo=input.member?.user;
  const avatar=snowflake(userInfo?.id)&&/^[a-f0-9_]+$/i.test(userInfo?.avatar||'')?`https://cdn.discordapp.com/avatars/${userInfo.id}/${userInfo.avatar}.png?size=128`:undefined;
@@ -110,7 +110,7 @@ export async function botConfigAction(db:SupabaseClient,input:any,user:string,ex
   return botConfigPanel(db,input,user,['channel_logs_id','pix_log_channel_id','category_support_id'].includes(value)?(value==='pix_log_channel_id'?'pagamentos':'canais'):'cargos','Configuração salva.');
  }
  if(action==='run'){
-  if(!['estoque','paineis','painel-estoque','canais-vendas','suportes','mensagens','lock','unlock','financeiro','ranking-produtos','scan','backup','preview','ia','diagnostico','verification-panel'].includes(value))throw new BotError('UNSUPPORTED_ACTION');
+  if(!['estoque','paineis','painel-estoque','canais-vendas','suportes','mensagens','lock','unlock','financeiro','ranking-produtos','scan','backup','preview','ia','diagnostico','verification-panel','sync-commands'].includes(value))throw new BotError('UNSUPPORTED_ACTION');
   if(argument&&!((value==='financeiro'&&['today','month','total','7days','30days'].includes(argument))||(value==='ia'&&['on','off','suggest','automatic'].includes(argument))))throw new BotError('UNSUPPORTED_ACTION');
   if(value==='verification-panel')return publishVerificationPanel(db,input,user);
   const result=await execute(value,value==='financeiro'?{periodo:argument||'total'}:value==='ia'?['suggest','automatic'].includes(argument)?{modo:argument}:{ligada:argument==='on'}:{});
