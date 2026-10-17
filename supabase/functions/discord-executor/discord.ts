@@ -1,4 +1,4 @@
-export class ExecutorError extends Error {
+import {styleNexiumMessagePayload} from '../discord-interactions/brand.ts';\nexport class ExecutorError extends Error {
   code: string;
   httpStatus: number;
   constructor(code: string, httpStatus = 400) { super(code); this.code = code; this.httpStatus = httpStatus; }
@@ -35,7 +35,7 @@ export async function discordGet(path: string, token: string, onAttempt: (attemp
 async function discordMessageRequest(channelId:string,messageId:string|undefined,body:unknown,token:string,fetcher:typeof fetch=fetch){
   let response:Response;
   const path=messageId?`/channels/${channelId}/messages/${messageId}`:`/channels/${channelId}/messages`;
-  try{response=await fetcher(`https://discord.com/api/v10${path}`,{method:messageId?'PATCH':'POST',headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(8000)});}catch{throw new ExecutorError('MUTATION_RESULT_UNCERTAIN_RESCAN',502);}
+  try{response=await fetcher(`https://discord.com/api/v10${path}`,{method:messageId?'PATCH':'POST',headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json'},body:JSON.stringify(styleNexiumMessagePayload(body)),signal:AbortSignal.timeout(8000)});}catch{throw new ExecutorError('MUTATION_RESULT_UNCERTAIN_RESCAN',502);}
   if(response.ok)return response.json();
   if(response.status===404&&messageId)return null;
   if(response.status===401)throw new ExecutorError('DISCORD_TOKEN_INVALID',424);
