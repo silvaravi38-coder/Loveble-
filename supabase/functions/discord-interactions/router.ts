@@ -9,8 +9,9 @@ import {botConfigPanel,botConfigAction} from './bot-config.ts';
 import {ticketSubjects} from './ticket-ui.ts';
 import {ticketActionButton} from './ticket-actions.ts';
 import {createSalesChannels} from './sales-channels.ts';
+import {verificationAction} from './verification.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
-import {BotError,checked,actorFor,discord,productFor,uuid,snowflake,safeText,audit,fortalezaMonthStart} from './api.ts';
+import {BotError,checked,actorFor,discord,productFor,uuid,snowflake,safeText,audit,fortalezaMonthStart,row,linkButton} from './api.ts';
 import {commandAliases,commandLabels} from '../discord-executor/commands.ts';
 import {adminDashboard,announce,refreshStockRequestPanel,profileCard,productRanking} from './shortcuts.ts';
 import {privateMessage,privateEmbed,orderMessage} from './security.ts';
@@ -27,7 +28,7 @@ export function commandParts(input:any) {
  for(const o of alias?input.data?.options||[]:input.data?.options?.[0]?.options||[])options[o.name]=o.value;
  const command=alias?.command||name;
  let sub=alias?.sub||input.data?.options?.[0]?.name||'';
- if(name==='gerenciar_stock'&&['repor','manual'].includes(options.acao)){if(!options.produto)throw new BotError('PRODUCT_REQUIRED');sub='restock';}
+ if(name==='gerenciar_stock'&&['repor','manual'].includes(options.acao)&&options.produto)sub='restock';
  return {command,sub,options};
 }
 export function eventAction(input:any) {return input.type===2?`${input.data?.name||'unknown'}:${input.data?.options?.[0]?.name||'unknown'}`:[3,5].includes(input.type)?String(input.data?.custom_id||'').split(':').slice(0,2).join(':'):'unsupported';}
@@ -48,7 +49,7 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
  if(sub==='anunciar')return announce(db,input,actor.id,o);
  if(sub==='painel-estoque')return refreshStockRequestPanel(db,input,actor.id);
  if(sub==='ranking-produtos')return productRanking(db,actor.id,o.periodo);
- if(sub==='produto'){const details=await productDetails(db,o.produto,undefined,input.guild_id);return {...details,content:'Gestão de produtos e variantes: https://nexium-store.vercel.app/admin'};}
+ if(sub==='produto'){if(o.produto){const details=await productDetails(db,o.produto,undefined,input.guild_id);return {...details,content:'Gestão de produtos e variantes: https://nexium-store.vercel.app/admin'};}const products=checked(await db.from('products').select('id,name,price').eq('active',true).order('name').limit(25)) as any[];if(!products.length)return privateEmbed('📦 Gerenciar produtos','Não há produtos ativos para selecionar.');return {...privateEmbed('📦 Gerenciar produtos','Escolha um produto no menu. Você não precisa copiar nome, slug ou ID.'),components:[row([{type:3,custom_id:'nexium:admin-product:select',placeholder:'Escolha um produto',min_values:1,max_values:1,options:products.map(p=>({label:safeText(p.name,100),value:p.id,description:'A partir de R$ '+Number(p.price).toFixed(2).replace('.',',')}))}]),row([linkButton('Editar catálogo e variantes','https://nexium-store.vercel.app/admin')])]};}
  if(['agendar','mensagens','cancelar-mensagem'].includes(sub))return manageSchedules(db,input,userId,sub,o);
  if(sub==='ia')return configureAi(db,input,userId,o);
  if(sub==='lock'||sub==='unlock')return previewChannelControl(db,input,userId,sub);
@@ -88,7 +89,7 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
   if(previous)checked(await db.from('discord_bot_settings').update(data).eq('id',previous.id));else checked(await db.from('discord_bot_settings').insert(data));
   await audit(db,input.guild_id,actor.id,'bot_configured',input.guild_id,data);return privateMessage('Configurações salvas. IDs validados no Discord.');
  }
- if(sub==='estoque')return stockPanel(db,userId,o.produto);
+ if(sub==='estoque'||sub==='restock')return stockPanel(db,userId,o.produto);
  if(sub==='cupom'){
   const code=String(o.codigo).trim().toUpperCase();if(!/^[A-Z0-9_-]{3,32}$/.test(code)||!Number.isFinite(o.desconto)||o.desconto<1||o.desconto>99||!Number.isInteger(o.limite)||o.limite<1)throw new BotError('INVALID_COUPON');
   const c=checked(await db.from('coupons').insert({code,discount_type:'percent',discount_value:o.desconto,discount_percent:o.desconto,max_uses:o.limite,active:true}).select('id').single());
@@ -108,6 +109,17 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
 export async function route(db:SupabaseClient,input:any,userId:string) {
  if(input.type===3){
   const parts=String(input.data.custom_id).split(':');
+  if(parts[1]==='verify')return verificationAction(db,input,parts[2],parts[3]);
+  if(parts[1]==='admin-product'&&parts[2]==='select'){
+   const actor=await actorFor(db,userId);if(actor.role!=='admin')throw new BotError('FORBIDDEN');
+   const id=input.data.values?.[0];if(!uuid(id))throw new BotError('INVALID_PRODUCT');
+   const product=checked(await db.from('products').select('id,name,description,price,automatic_delivery,manual_display_quantity,delivery_time,requirements').eq('id',id).eq('active',true).maybeSingle());
+   if(!product)throw new BotError('PRODUCT_UNAVAILABLE');
+   const allProducts=checked(await db.from('products').select('id,name,price').eq('active',true).order('name').limit(25)) as any[];
+   const variants=checked(await db.from('product_variants').select('name,price,stock,active').eq('product_id',id).eq('active',true).order('price').limit(25)) as any[];
+   const fields=[{name:'💰 Preço base',value:'R$ '+Number(product.price).toFixed(2).replace('.',','),inline:true},{name:'📦 Entrega',value:product.automatic_delivery?'Automática':'Manual',inline:true},...(product.manual_display_quantity!==null?[{name:'📊 Quantidade exibida',value:String(product.manual_display_quantity),inline:true}]:[]),...(variants.length?[{name:'🧩 Opções',value:variants.map(v=>'• '+safeText(v.name,70)+' — R$ '+Number(v.price).toFixed(2).replace('.',',')+' • estoque '+v.stock).join('\\n').slice(0,1024),inline:false}]:[])];
+   return {...privateEmbed('🛍️ '+safeText(product.name,150),safeText(product.description||'Produto ativo no catálogo.',900),fields),components:[row([linkButton('Editar produto e variantes','https://nexium-store.vercel.app/admin')]),row([{type:3,custom_id:'nexium:admin-product:select',placeholder:'Selecionar outro produto',min_values:1,max_values:1,options:allProducts.map(p=>({label:safeText(p.name,100),value:p.id,description:'A partir de R$ '+Number(p.price).toFixed(2).replace('.',',')}))}])]};
+  }
   if(parts[1]==='stock')return stockAction(db,input,userId);
   if(['manual-delivery','manual-delivery-confirm'].includes(parts[1]))return manualDeliveryAction(db,input,userId,parts[2],parts[1]==='manual-delivery-confirm');
   if(parts[1]==='store'){if(parts[2]==='checklist')return setupChecklist(db,input,userId);if(parts[2]==='sales-channel')return setSalesChannel(db,input,userId);if(['ai-apply','ai-discard'].includes(parts[2]))return applyStoreProposal(db,input,userId,parts[3],parts[2]==='ai-discard');throw new BotError('UNSUPPORTED_ACTION');}
