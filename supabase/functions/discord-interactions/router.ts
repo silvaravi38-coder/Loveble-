@@ -10,6 +10,7 @@ import {ticketSubjects} from './ticket-ui.ts';
 import {ticketActionButton} from './ticket-actions.ts';
 import {createSalesChannels} from './sales-channels.ts';
 import {verificationAction} from './verification.ts';
+import {orderPicker,orderPickerAction,saveOrderCosts,panelPicker,panelPickerAction,applyPanelAction,previewPicker,previewPickerAction,applySelectedPreview,schedulePicker,schedulePickerAction,cancelSelectedSchedule} from './workflow-selectors.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,actorFor,discord,productFor,uuid,snowflake,safeText,audit,fortalezaMonthStart,row,linkButton} from './api.ts';
 import {commandAliases,commandLabels,nexiumCommands} from '../discord-executor/commands.ts';
@@ -51,11 +52,13 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
  if(sub==='painel-estoque')return refreshStockRequestPanel(db,input,actor.id);
  if(sub==='ranking-produtos')return productRanking(db,actor.id,o.periodo);
  if(sub==='produto'){if(o.produto){const details=await productDetails(db,o.produto,undefined,input.guild_id);return {...details,content:'Gestão de produtos e variantes: https://nexium-store.vercel.app/admin'};}const products=checked(await db.from('products').select('id,name,price').eq('active',true).order('name').limit(25)) as any[];if(!products.length)return privateEmbed('📦 Gerenciar produtos','Não há produtos ativos para selecionar.');return {...privateEmbed('📦 Gerenciar produtos','Escolha um produto no menu. Você não precisa copiar nome, slug ou ID.'),components:[row([{type:3,custom_id:'nexium:admin-product:select',placeholder:'Escolha um produto',min_values:1,max_values:1,options:products.map(p=>({label:safeText(p.name,100),value:p.id,description:'A partir de R$ '+Number(p.price).toFixed(2).replace('.',',')}))}]),row([linkButton('Editar catálogo e variantes','https://nexium-store.vercel.app/admin')])]};}
- if(['agendar','mensagens','cancelar-mensagem'].includes(sub))return manageSchedules(db,input,userId,sub,o);
+ if(sub==='cancelar-mensagem')return o.mensagem?manageSchedules(db,input,userId,sub,o):schedulePicker(db,input,userId);
+ if(['agendar','mensagens'].includes(sub))return manageSchedules(db,input,userId,sub,o);
  if(sub==='ia')return configureAi(db,input,userId,o);
  if(sub==='lock'||sub==='unlock')return previewChannelControl(db,input,userId,sub);
- if(sub==='reconciliar')return reconcilePayment(db,o.pedido,input.guild_id,actor.id);
+ if(sub==='reconciliar')return o.pedido?reconcilePayment(db,o.pedido,input.guild_id,actor.id):orderPicker(db,input,userId,'reconcile');
  if(sub==='custos'){
+  if(!o.pedido)return orderPicker(db,input,userId,'costs');
   if(!uuid(o.pedido)||!Number.isFinite(o.custo)||!Number.isFinite(o.taxa)||o.custo<0||o.taxa<0||String(o.motivo).trim().length<3)throw new BotError('INVALID_FINANCE_DATA');
   const order=checked(await db.from('orders').select('id,status').eq('id',o.pedido).single());if(!['paid','processing','delivered'].includes(order.status))throw new BotError('ORDER_NOT_PAID');
   const data={order_id:order.id,cost:o.custo,fee:o.taxa,note:String(o.motivo).slice(0,500),updated_by:actor.id,updated_at:new Date().toISOString()};
@@ -75,8 +78,9 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
   return panelJob(db,input.guild_id,actor.id,'publish',panel.id,()=>publishPanel(db,input.guild_id,input.channel_id,actor.id,panel.id));
  }
  if(sub==='paineis'){const panels=checked(await db.from('discord_sales_panels').select('id,name,channel_id,active,sync_status').eq('guild_id',input.guild_id).order('name').limit(20)) as any[];if(!panels.length)return privateEmbed('🗂️ Painéis de venda','Ainda não há painéis cadastrados.\n\nUse `/nexium-admin painel` para criar um painel de vendas.');const states:Record<string,string>={synced:'✅ Publicado',unpublished:'⏸️ Despublicado',pending:'🕓 Pendente',failed:'⚠️ Verificar'};const fields=panels.map(p=>({name:`${p.active?'🟢':'⚪'} ${safeText(p.name,80)}`,value:`**Status:** ${states[p.sync_status]||'🔎 '+safeText(p.sync_status,30)}\n**Canal:** <#${p.channel_id}>\n**ID:** \`${p.id}\``,inline:false}));return privateEmbed(`🗂️ Painéis de venda • ${panels.length}`, 'Confira o canal, o status e o identificador de cada painel.',fields);}
- if(sub==='sincronizar'||sub==='despublicar')return panelJob(db,input.guild_id,actor.id,sub==='despublicar'?'unpublish':'sync',o.painel,()=>publishPanel(db,input.guild_id,input.channel_id,actor.id,o.painel,sub==='despublicar'));
- if(['scan','preview','backup','aplicar'].includes(sub)){if(sub==='aplicar'&&!uuid(o.preview))throw new BotError('INVALID_ID');return executorJob(db,input.guild_id,actor.id,sub==='aplicar'?'apply':sub,o.estrategia||'reuse',o.preview);}
+ if(sub==='sincronizar'||sub==='despublicar'){if(!o.painel)return panelPicker(db,input,userId,sub==='despublicar'?'unpublish':'sync');const panel=checked(await db.from('discord_sales_panels').select('id,channel_id').eq('id',o.painel).eq('guild_id',input.guild_id).maybeSingle());if(!panel)throw new BotError('PANEL_PRODUCT_MISMATCH');return panelJob(db,input.guild_id,actor.id,sub==='despublicar'?'unpublish':'sync',panel.id,()=>publishPanel(db,input.guild_id,panel.channel_id,actor.id,panel.id,sub==='despublicar'));}
+ if(sub==='aplicar')return o.preview?executorJob(db,input.guild_id,actor.id,'apply',o.estrategia||'reuse',o.preview):previewPicker(db,input,userId);
+ if(['scan','preview','backup'].includes(sub))return executorJob(db,input.guild_id,actor.id,sub,o.estrategia||'reuse');
  if(sub==='configurar'){
   if(!Object.keys(o).length)return botConfigPanel(db,input,userId);
   const data:Record<string,unknown>={guild_id:input.guild_id,updated_by:actor.id};
@@ -108,9 +112,17 @@ async function admin(db:SupabaseClient,input:any,userId:string,sub:string,o:Reco
  throw new BotError('UNSUPPORTED_ACTION');
 }
 export async function route(db:SupabaseClient,input:any,userId:string) {
+ if(input.type===5&&String(input.data?.custom_id||'').startsWith('nexium:cost-submit:'))return saveOrderCosts(db,input,userId);
  if(input.type===3){
   const parts=String(input.data.custom_id).split(':');
   if(parts[1]==='verify')return verificationAction(db,input,parts[2],parts[3]);
+  if(parts[1]==='order-picker')return orderPickerAction(db,input,userId,parts[2]);
+  if(parts[1]==='panel-picker')return panelPickerAction(db,input,userId,parts[2]);
+  if(parts[1]==='panel-action')return applyPanelAction(db,input,userId,parts[2],parts[3]);
+  if(parts[1]==='preview-picker')return previewPickerAction(db,input,userId);
+  if(parts[1]==='preview-apply')return applySelectedPreview(db,input,userId,parts[2]);
+  if(parts[1]==='schedule-picker')return schedulePickerAction(db,input,userId);
+  if(parts[1]==='schedule-cancel')return cancelSelectedSchedule(db,input,userId,parts[2]);
   if(parts[1]==='admin-product'&&parts[2]==='select'){
    const actor=await actorFor(db,userId);if(actor.role!=='admin')throw new BotError('FORBIDDEN');
    const id=input.data.values?.[0];if(!uuid(id))throw new BotError('INVALID_PRODUCT');
@@ -160,10 +172,11 @@ export async function route(db:SupabaseClient,input:any,userId:string) {
  if(sub==='perfil')return profileCard(db,userId);
  if(sub==='pedidos')return orders(db,userId);
  if(sub==='catalogo')return catalogue(db);
- if(sub==='produto')return productDetails(db,o.produto,undefined,input.guild_id);
- if(sub==='comprar'){const p=await productFor(db,o.produto);return startPurchase(db,input,userId,p.id,o.variante,undefined,o.cupom);}
- if(sub==='pagamento')return paymentStatus(db,userId,o.pedido);
+ if(sub==='produto')return o.produto?productDetails(db,o.produto,undefined,input.guild_id):catalogue(db);
+ if(sub==='comprar'){if(!o.produto)return catalogue(db);const p=await productFor(db,o.produto);return startPurchase(db,input,userId,p.id,o.variante,undefined,o.cupom);}
+ if(sub==='pagamento')return o.pedido?paymentStatus(db,userId,o.pedido):orderPicker(db,input,userId,'payment');
  if(sub==='entrega'){
+  if(!o.pedido)return orderPicker(db,input,userId,'delivery');
   if(!uuid(o.pedido))throw new BotError('INVALID_ID');const actor=await actorFor(db,userId);
   const order=checked(await db.from('orders').select('id,status').eq('id',o.pedido).eq('user_id',actor.id).maybeSingle());if(!order)throw new BotError('ORDER_NOT_OWNED');
   const delivered=await db.from('order_deliveries').select('id',{count:'exact',head:true}).eq('order_id',order.id);if(delivered.error)throw new BotError('DATABASE_ERROR');
