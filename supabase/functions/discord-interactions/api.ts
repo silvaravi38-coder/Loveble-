@@ -1,4 +1,5 @@
-import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';\nimport {styleNexiumMessagePayload} from './brand.ts';
+import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
+import {styleNexiumMessagePayload} from './brand.ts';
 export class BotError extends Error {code:string;constructor(code:string){super(code);this.code=code;}}
 export const uuid=(value:unknown):value is string=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 export const snowflake=(value:unknown):value is string=>typeof value==='string'&&/^[0-9]{17,20}$/.test(value);
