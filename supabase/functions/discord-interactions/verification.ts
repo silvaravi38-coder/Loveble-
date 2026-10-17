@@ -44,7 +44,7 @@ export async function publishVerificationPanel(db:SupabaseClient,input:any,user:
  const channel=await discord('/channels/'+channelBinding.discord_id);
  if(channel.guild_id!==input.guild_id||![0,5].includes(channel.type))throw new BotError('WRONG_PANEL_CHANNEL');
  await validateRole(input.guild_id,roleBinding.discord_id);
- const payload={content:null,allowed_mentions:{parse:[]},embeds:[{author:{name:'NEXIUM STORE • ACESSO AO SERVIDOR'},title:'🛡️ Verificação de membro',description:'Leia as regras do servidor e toque no botão abaixo para confirmar que você é uma pessoa e liberar seu acesso.\n\nA equipe nunca pedirá sua senha ou códigos de login.',color:0x5865f2,footer:{text:'Nexium Store • Verificação segura'}}],components:[row([button('✅ Verificar e liberar acesso','nexium:verify:start',1)])]};
+ const payload={content:null,allowed_mentions:{parse:[]},embeds:[{author:{name:'NEXIUM STORE • ACESSO AO SERVIDOR'},title:'🛡️ Verificação de membro',description:'Leia as regras do servidor e toque no botão abaixo para confirmar que leu as regras e liberar seu acesso.\n\nA equipe nunca pedirá sua senha ou códigos de login.',color:0x5865f2,footer:{text:'Nexium Store • Verificação segura'}}],components:[row([button('✅ Verificar e liberar acesso','nexium:verify:start',1)])]};
  let message:any;
  if(panelBinding){
   try{
@@ -67,7 +67,7 @@ export async function verificationAction(db:SupabaseClient,input:any,action:stri
  if(!channelBinding||!roleBinding||!panelBinding||channelBinding.discord_id!==input.channel_id)throw new BotError('VERIFICATION_PANEL_NOT_FOUND');
  if(action==='start'){
   if(input.message?.id!==panelBinding.discord_id)throw new BotError('VERIFICATION_PANEL_NOT_FOUND');
-  return {...privateMessage(''),embeds:[{title:'🛡️ Confirme sua entrada',description:'Ao confirmar, você declara que leu e aceita as regras do servidor. O bot concederá o cargo de membro verificado.',color:0x5865f2}],components:[row([button('Li e aceito as regras','nexium:verify:confirm:'+panelBinding.discord_id,3)])]};
+  return {...privateMessage(''),embeds:[{title:'🛡️ Confirme sua entrada',description:'Ao confirmar, você confirma que leu e aceita as regras do servidor. O bot concederá o cargo de membro verificado.',color:0x5865f2}],components:[row([button('Li e aceito as regras','nexium:verify:confirm:'+panelBinding.discord_id,3)])]};
  }
  if(action==='confirm'){
   if(panelId!==panelBinding.discord_id)throw new BotError('VERIFICATION_PANEL_NOT_FOUND');
