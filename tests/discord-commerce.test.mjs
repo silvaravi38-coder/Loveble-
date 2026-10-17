@@ -481,7 +481,7 @@ test('closed private ticket thread can be deleted while public or foreign thread
 test('all outbound embeds share Nexium identity, section dividers and preserve controls',()=>{
  const input={content:null,components:[{type:1,components:[{type:2,label:'Continuar'}]}],embeds:[{title:'Central',description:'Escolha uma ação.',fields:[{name:'Vendas',value:'Ativas'},{name:'Suporte',value:'Disponível'}]}]};
  const output=styleNexiumMessagePayload(input);
- assert.equal(output.embeds[0].author.name,'NEXIUM STORE • CENTRAL DE COMANDO');
+ assert.equal(output.embeds[0].author.name,'NEXIUM STORE');
  assert.equal(output.embeds[0].color,0x5865f2);
  assert.equal(output.embeds[0].footer.text,'NEXIUM STORE • Seu universo digital em um só lugar');
  assert.equal(output.embeds[0].fields.filter(field=>field.name.startsWith('━')).length,2);
