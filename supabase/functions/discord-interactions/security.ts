@@ -18,6 +18,7 @@ export function interactionAction(input:{type:number;data?:{name?:string;custom_
   return 'unsupported';
 }
 export const privateMessage=(content:string)=>({content,allowed_mentions:{parse:[]},components:[] as unknown[]});
+export const privateEmbed=(title:string,description:string,fields:unknown[]=[])=>({content:null,allowed_mentions:{parse:[]},embeds:[{title,description,color:0x5865f2,...(fields.length?{fields}:{}),footer:{text:'Nexium Store • Central administrativa'},timestamp:new Date().toISOString()}],components:[] as unknown[]});
 export function orderMessage(orders:{id:string;status:string;created_at:string}[]) {
   const labels:Record<string,string>={pending:'Aguardando pagamento',paid:'Pago',processing:'Em processamento',delivered:'Entregue',cancelled:'Cancelado',refunded:'Reembolsado'};
   return privateMessage(orders.length?'Seus pedidos mais recentes:\n'+orders.slice(0,5).map(o=>`• #${o.id.slice(0,8).toUpperCase()} — ${labels[o.status]||'Status indisponível'} (${new Date(o.created_at).toLocaleDateString('pt-BR',{timeZone:'America/Fortaleza'})})`).join('\n'):'Nenhum pedido foi encontrado na sua conta Nexium.');
