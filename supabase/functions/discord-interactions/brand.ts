@@ -13,16 +13,16 @@ export function styleNexiumMessagePayload(message:any){
   const embed={...source};
   if(Array.isArray(embed.fields)&&embed.fields.length){
    const fields:any[]=[];
-   if(embed.description)fields.push(sectionDivider);
+   const isDivider=(field:any)=>field?.name===sectionDivider.name;\n   if(embed.description&&!isDivider(embed.fields[0]))fields.push(sectionDivider);
    embed.fields.forEach((field:any,index:number)=>{
-    if(index>0&&!embed.fields[index-1]?.inline&&!field.inline)fields.push(sectionDivider);
+    if(index>0&&!embed.fields[index-1]?.inline&&!field.inline&&!isDivider(embed.fields[index-1])&&!isDivider(field))fields.push(sectionDivider);
     fields.push(field);
    });
    embed.fields=fields.length<=25?fields:embed.fields;
   }
   return {
    ...embed,
-   author:{name:'NEXIUM STORE • CENTRAL DE COMANDO',...(embed.author||{})},
+   author:{name:'NEXIUM STORE',...(embed.author||{})},
    color:embed.color??0x5865f2,
    footer:{text:'NEXIUM STORE • Seu universo digital em um só lugar',...(embed.footer||{})},
    timestamp:embed.timestamp||new Date().toISOString(),
