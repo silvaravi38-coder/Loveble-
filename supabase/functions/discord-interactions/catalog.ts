@@ -2,7 +2,7 @@ import {reusableDelivery} from './product-fulfilment.ts';
 import {ticketPanel} from './ticket-ui.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,discord,audit,row,button,linkButton,safeText,productFor,uuid} from './api.ts';
-import {applicationId,privateMessage} from './security.ts';
+import {applicationId,privateMessage,privateEmbed} from './security.ts';
 const money=(value:unknown)=>Number(value).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 export async function catalogue(db:SupabaseClient) {
  const products=checked(await db.from('products').select('id,name,price').eq('active',true).order('name').limit(25)) as any[];
@@ -55,7 +55,7 @@ export async function publishPanel(db:SupabaseClient,guild:string,channelId:stri
   uncertain=!!message;
   checked(await db.from('discord_sales_panels').update({message_id:message?.id||panel.message_id,active:!unpublish,sync_status:unpublish?'unpublished':'synced',last_synced_at:new Date().toISOString()}).eq('id',panel.id));
   await audit(db,guild,actorId,unpublish?'panel_unpublished':'panel_synced',panel.id,{channel_id:panel.channel_id,message_id:message?.id||panel.message_id});
-  uncertain=false;return privateMessage(`Painel ${unpublish?'despublicado':'publicado/sincronizado'}: ${panel.name}\nID: ${panel.id}\nMensagem: https://discord.com/channels/${guild}/${panel.channel_id}/${message?.id||panel.message_id}`);
+  uncertain=false;const messageUrl=`https://discord.com/channels/${guild}/${panel.channel_id}/${message?.id||panel.message_id}`;return privateEmbed(unpublish?'⏸️ Painel despublicado':'✅ Painel publicado com sucesso',`**🗂️ Painel:** ${safeText(panel.name,100)}\n**📍 Canal:** <#${panel.channel_id}>\n**🆔 Identificador:** \`${panel.id}\`\n\n🔗 [Abrir mensagem no Discord](${messageUrl})`);
  }catch(e){if(e instanceof BotError&&e.code==='MUTATION_UNCERTAIN')uncertain=true;throw e;}
  finally{if(!uncertain)await db.from('discord_panel_locks').delete().eq('panel_id',panelId).eq('lease_token',lease);}
 }
