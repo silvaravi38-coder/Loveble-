@@ -64,7 +64,7 @@ export async function saveOrderCosts(db:SupabaseClient,input:any,user:string){
  const id=String(input.data.custom_id).split(':')[2];if(!uuid(id))throw new BotError('INVALID_ID');
  const values:Record<string,string>={};
  for(const r of input.data.components||[])for(const c of r.components||[])values[c.custom_id]=String(c.value||'').trim();
- const parse=(raw:string)=>Number(raw.replace(/\s/g,'').replace(/\./g,'').replace(',','.'));
+ const parse=(raw:string)=>{const normalized=raw.replace(/\s/g,'');return Number(normalized.includes(',')?normalized.replace(/\./g,'').replace(',','.'):normalized);};
  const cost=parse(values.cost||''),fee=parse(values.fee||'');
  if(!Number.isFinite(cost)||!Number.isFinite(fee)||cost<0||fee<0||!values.reason||values.reason.length<3)throw new BotError('INVALID_FINANCE_DATA');
  const order=checked(await db.from('orders').select('id,status').eq('id',id).maybeSingle());
@@ -78,7 +78,7 @@ export async function panelPicker(db:SupabaseClient,input:any,user:string,action
  const panels=checked(await db.from('discord_sales_panels').select('id,name,channel_id,sync_status,active').eq('guild_id',input.guild_id).eq('active',true).order('name').limit(25)) as any[];
  if(!panels.length)return privateEmbed('🗂️ Painéis de venda','Não há painéis ativos para selecionar.');
  const label=action==='sync'?'sincronizar':'despublicar';
- return {...privateEmbed('🗂️ Escolher painel para '+label,'Selecione pelo nome. Nenhum ID precisa ser informado.'),components:[row([{type:3,custom_id:'nexium:panel-picker:'+action,placeholder:'Escolha um painel',min_values:1,max_values:1,options:panels.map(p=>({label:safeText(p.name,100),value:p.id,description:'Canal '+p.channel_id+' • '+safeText(p.sync_status,30)}))}])]};
+ return {...privateEmbed('🗂️ Escolher painel para '+label,'Selecione pelo nome. Nenhum ID precisa ser informado.'),components:[row([{type:3,custom_id:'nexium:panel-picker:'+action,placeholder:'Escolha um painel',min_values:1,max_values:1,options:panels.map(p=>({label:safeText(p.name,100),value:p.id,description:'Canal configurado • '+safeText(p.sync_status,30)}))}])]};
 }
 export async function panelPickerAction(db:SupabaseClient,input:any,user:string,action:string){
  if(!['sync','unpublish'].includes(action))throw new BotError('UNSUPPORTED_ACTION');
@@ -122,7 +122,7 @@ export async function schedulePicker(db:SupabaseClient,input:any,user:string){
  const actor=await actorFor(db,user);if(actor.role!=='admin')throw new BotError('FORBIDDEN');
  const rows=checked(await db.from('discord_scheduled_messages').select('id,channel_id,content,scheduled_at').eq('guild_id',input.guild_id).eq('status','queued').order('scheduled_at').limit(25)) as any[];
  if(!rows.length)return privateEmbed('🗓️ Mensagens programadas','Não há mensagens na fila para cancelar.');
- return {...privateEmbed('🗓️ Escolher mensagem','Selecione pelo texto e horário para revisar o cancelamento.'),components:[row([{type:3,custom_id:'nexium:schedule-picker',placeholder:'Escolha uma mensagem',min_values:1,max_values:1,options:rows.map(m=>({label:safeText(m.content,100)||'Mensagem sem texto',value:m.id,description:new Date(m.scheduled_at).toLocaleString('pt-BR')+' • #'+safeText(m.channel_id,30)}))}])]};
+ return {...privateEmbed('🗓️ Escolher mensagem','Selecione pelo texto e horário para revisar o cancelamento.'),components:[row([{type:3,custom_id:'nexium:schedule-picker',placeholder:'Escolha uma mensagem',min_values:1,max_values:1,options:rows.map(m=>({label:safeText(m.content,100)||'Mensagem sem texto',value:m.id,description:new Date(m.scheduled_at).toLocaleString('pt-BR')}))}])]};
 }
 export async function schedulePickerAction(db:SupabaseClient,input:any,user:string){
  const actor=await actorFor(db,user);if(actor.role!=='admin')throw new BotError('FORBIDDEN');
