@@ -45,7 +45,7 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
    {label:'Personalização da loja',value:'personalizacao',description:'Banners e identidade visual',emoji:{name:'🎨'}},
   ]}])];
  }else if(page==='marketplace'){
-  title='Gerenciar Marketplace';description='Crie canais de venda automaticamente para cada produto ativo do site. Cada canal recebe o card atualizado do produto com preço, imagem, opções e botão de compra.\n\nConsulte estoque e painéis, ou atualize o painel de solicitar produtos.\n**Entregas manuais:** os pedidos pagos aparecem no canal privado de logs, com confirmação de entrega e alerta após 9 horas.\n**Repor estoque:** /gerenciar_stock acao:repor produto:nome\n**Criar cupom:** /cupom\n**Editar produtos e variantes:** administração da loja.';
+  title='Gerenciar Marketplace';description='Crie canais de venda automaticamente para cada produto ativo do site. Cada canal recebe o card atualizado do produto com preço, imagem, opções e botão de compra.\n\nConsulte estoque e painéis, ou atualize o painel de solicitar produtos.\n**Entregas manuais:** os pedidos pagos aparecem no canal privado de logs, com confirmação de entrega e alerta após 9 horas.\n**Repor estoque:** /restock\n**Criar cupom:** /cupom\n**Editar produtos e variantes:** administração da loja.';
   components=[row([call('Criar canais de venda','canais-vendas')]),row([call('Consultar estoque','estoque'),call('Listar painéis','paineis'),call('Painel de estoque','painel-estoque')]),row([linkButton('Produtos e variantes','https://nexium-store.vercel.app/admin')]),back()];
  }else if(page==='atendimento'||page==='permissoes'){
   title=page==='atendimento'?'Gerenciar Atendimento':'Gerenciar Permissões';description=`**Equipe de suporte:** ${ref(settings.role_support_id)}\n**Clientes:** ${ref(settings.role_customer_id)}\n**Categoria de suporte:** ${ref(settings.category_support_id,'channel')}\n\nNovos tickets abrem como conversas privadas dentro do canal do painel de atendimento.\n\nSelecione os cargos e a categoria abaixo. As ações administrativas continuam exigindo perfil admin na loja. O cargo Discord sozinho não concede acesso administrativo.`;
@@ -84,7 +84,7 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
   if(health[0]?.last_error==='AI_BILLING_REQUIRED'){description+='\n\n**Modo básico disponível:** o AI Gateway está bloqueado por faturamento; novas mensagens recebem orientações automáticas do catálogo.';components.splice(2,0,row([linkButton('Configurar conta do AI Gateway','https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%3Fmodal%3Dadd-credit-card')]));}
   else if(health[0]?.last_error){description+=health[0].last_error==='MESSAGE_CONTENT_REQUIRED'?'\n\n**Leitura do chat bloqueada:** ative Message Content Intent em Bot → Privileged Gateway Intents no Developer Portal e salve.':'\n\n**Último erro do atendimento:** '+safeText(health[0].last_error,100);components.splice(2,0,row([linkButton('Abrir configurações do Discord','https://discord.com/developers/applications/1557132199227031552/bot')]));}
  }else if(page==='divulgacao'){
-  title='Divulgação e Mensagens Automáticas';description='**Publicar agora:** /anunciar texto:mensagem\n**Agendar:** /nexium-admin agendar texto:mensagem quando:data\nUse data e horário com fuso, por exemplo 2026-10-08T12:00:00-03:00.\n**Cancelar:** /nexium-admin cancelar-mensagem mensagem:ID\nMenções automáticas ficam desativadas.';
+  title='Divulgação e Mensagens Automáticas';description='**Publicar agora:** /anunciar texto:mensagem\n**Agendar:** /agendar texto:mensagem quando:data\nInforme data e horário com fuso, por exemplo 2026-10-20T12:00:00-03:00.\n**Cancelar:** /cancelar-mensagem • escolha a mensagem no menu\nMenções automáticas ficam desativadas.';
   components=[row([call('Ver mensagens programadas','mensagens')]),back()];
  }else if(page==='personalizacao'){
   title='Personalização da Loja';description='A identidade visual da Nexium é gerenciada na administração da loja. Para mensagens do catálogo, consulte os painéis publicados. O QR Pix é gerado pelo provedor para cada pedido.';
@@ -102,9 +102,25 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
   title='Ferramentas e backups';description='Sincronize os comandos do servidor e escaneie ou salve backups da estrutura. O preview mostra as mudanças propostas. A aplicação exige selecionar e confirmar o preview pelo comando /nexium-admin aplicar.\nBackups incluem estrutura e permissões; mensagens não são incluídas.';
   components=[row([call('Atualizar comandos Discord','sync-commands'),nav('Divulgação','divulgacao'),call('Checkers da loja','diagnostico')]),row([call('Escanear servidor','scan'),call('Backup estrutural','backup'),call('Preview organizador','preview')]),row([linkButton('Admin e logs','https://nexium-store.vercel.app/admin')]),back()];
  }
+ const descriptionLines=description.split('\\n');
+ const organizedFields:any[]=[];
+ const introLines:string[]=[];
+ let activeField:any=null;
+ const flushField=()=>{if(activeField){organizedFields.push({name:activeField.name.slice(0,256),value:(activeField.value||'Configure usando os controles abaixo.').slice(0,1024),inline:false});activeField=null;}};
+ for(const line of descriptionLines){
+  const clean=line.trim();
+  if(!clean){flushField();continue;}
+  const heading=clean.match(/^\\*\\*(.{2,70}?)\\*\\*:?\\s*(.*)$/);
+  if(heading){flushField();const key=heading[1].replace(/:$/,'');const emoji=/pagam|pix|valor|preco/i.test(key)?'💳':/canal|log|aviso/i.test(key)?'🔔':/cargo|permiss/i.test(key)?'👥':/estoque|produto|venda/i.test(key)?'📦':/ticket|suporte|atend/i.test(key)?'🎧':/horario|agend|data/i.test(key)?'🕒':'📌';activeField={name:emoji+' '+key,value:heading[2]||''};continue;}
+  if(activeField)activeField.value+=(activeField.value?'\\n':'')+clean;
+  else introLines.push(clean);
+ }
+ flushField();
+ const cardDescription=introLines.join('\\n').slice(0,4096);
+ const cardFields=[...summary,...organizedFields].slice(0,25);
  const userInfo=input.member?.user;
  const avatar=snowflake(userInfo?.id)&&/^[a-f0-9_]+$/i.test(userInfo?.avatar||'')?`https://cdn.discordapp.com/avatars/${userInfo.id}/${userInfo.avatar}.png?size=128`:undefined;
- return {...privateMessage(''),embeds:[{author:{name:'NEXIUM STORE • CENTRAL DE CONTROLE'},title:`${icons[page]||'⚙️'} ${title}`,description,...(summary.length||notice?{fields:[...summary,...(notice?[{name:'✅ Atualização concluída',value:safeText(notice,500),inline:false}]:[])]}:{}),...(page==='home'&&avatar?{thumbnail:{url:avatar}}:{}),color:notice?nexiumBrand.success:nexiumBrand.accent,footer:{text:'Nexium Store • Painel exclusivo da administração'},timestamp:new Date().toISOString()}],components};
+ return {...privateMessage(''),embeds:[{author:{name:'NEXIUM STORE • CENTRAL DE CONTROLE'},title:`${icons[page]||'⚙️'} ${title}`,...(cardDescription?{description:cardDescription}:{}),...(cardFields.length||notice?{fields:[...cardFields,...(notice?[{name:'✅ Atualização concluída',value:safeText(notice,500),inline:false}]:[])].slice(0,25)}:{}),...(page==='home'&&avatar?{thumbnail:{url:avatar}}:{}),color:notice?nexiumBrand.success:nexiumBrand.accent,footer:{text:'Nexium Store • Painel exclusivo da administração'},timestamp:new Date().toISOString()}],components};
 }
 export async function botConfigAction(db:SupabaseClient,input:any,user:string,execute:(sub:string,options:Record<string,any>)=>Promise<any>){
  const actor=await actorFor(db,user);if(actor.role!=='admin')throw new BotError('FORBIDDEN');
