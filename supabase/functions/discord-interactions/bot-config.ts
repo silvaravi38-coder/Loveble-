@@ -102,7 +102,7 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
   title='Ferramentas e backups';description='Sincronize os comandos do servidor e escaneie ou salve backups da estrutura. O preview mostra as mudanças propostas. A aplicação exige selecionar e confirmar o preview pelo comando /nexium-admin aplicar.\nBackups incluem estrutura e permissões; mensagens não são incluídas.';
   components=[row([call('Atualizar comandos Discord','sync-commands'),nav('Divulgação','divulgacao'),call('Checkers da loja','diagnostico')]),row([call('Escanear servidor','scan'),call('Backup estrutural','backup'),call('Preview organizador','preview')]),row([linkButton('Admin e logs','https://nexium-store.vercel.app/admin')]),back()];
  }
- const descriptionLines=description.split('\\n');
+ const descriptionLines=description.split('\n');
  const organizedFields:any[]=[];
  const introLines:string[]=[];
  let activeField:any=null;
@@ -110,13 +110,13 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
  for(const line of descriptionLines){
   const clean=line.trim();
   if(!clean){flushField();continue;}
-  const heading=clean.match(/^\\*\\*(.{2,70}?)\\*\\*:?\\s*(.*)$/);
+  const heading=clean.match(/^\*\*(.{2,70}?)\*\*:?\s*(.*)$/);
   if(heading){flushField();const key=heading[1].replace(/:$/,'');const emoji=/pagam|pix|valor|preco/i.test(key)?'💳':/canal|log|aviso/i.test(key)?'🔔':/cargo|permiss/i.test(key)?'👥':/estoque|produto|venda/i.test(key)?'📦':/ticket|suporte|atend/i.test(key)?'🎧':/horario|agend|data/i.test(key)?'🕒':'📌';activeField={name:emoji+' '+key,value:heading[2]||''};continue;}
-  if(activeField)activeField.value+=(activeField.value?'\\n':'')+clean;
+  if(activeField)activeField.value+=(activeField.value?'\n':'')+clean;
   else introLines.push(clean);
  }
  flushField();
- const cardDescription=introLines.join('\\n').slice(0,4096);
+ const cardDescription=introLines.join('\n').slice(0,4096);
  const cardFields=[...summary,...organizedFields].slice(0,25);
  const userInfo=input.member?.user;
  const avatar=snowflake(userInfo?.id)&&/^[a-f0-9_]+$/i.test(userInfo?.avatar||'')?`https://cdn.discordapp.com/avatars/${userInfo.id}/${userInfo.avatar}.png?size=128`:undefined;
