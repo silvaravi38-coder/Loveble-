@@ -13,7 +13,7 @@ import {verificationAction} from './verification.ts';
 import {orderPicker,orderPickerAction,saveOrderCosts,panelPicker,panelPickerAction,applyPanelAction,previewPicker,previewPickerAction,applySelectedPreview,schedulePicker,schedulePickerAction,cancelSelectedSchedule} from './workflow-selectors.ts';
 import type {SupabaseClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {BotError,checked,actorFor,discord,productFor,uuid,snowflake,safeText,audit,fortalezaMonthStart,row,linkButton} from './api.ts';
-import {commandAliases,commandLabels,nexiumCommands} from '../discord-executor/commands.ts';
+import {commandAliases,nexiumCommands} from '../discord-executor/commands.ts';
 import {adminDashboard,announce,refreshStockRequestPanel,profileCard,productRanking} from './shortcuts.ts';
 import {privateMessage,privateEmbed,orderMessage,applicationId} from './security.ts';
 import {catalogue,productDetails,publishPanel} from './catalog.ts';
@@ -167,7 +167,21 @@ export async function route(db:SupabaseClient,input:any,userId:string) {
  }
  if(command!=='nexium')throw new BotError('UNSUPPORTED_ACTION');
  if(sub==='teste')return {...privateMessage('Nexium conectado. Catálogo, pedidos, PIX e suporte disponíveis. Use /nexium ajuda.'),components:[{type:1,components:[{type:2,style:1,label:'Meus pedidos',custom_id:'nexium:my-orders:v1'}]}]};
- if(sub==='ajuda')return privateMessage(commandLabels().join('\n')+'\nAções de staff/admin exigem conta vinculada e perfil autorizado na loja.');
+ if(sub==='ajuda'){
+  const help=privateEmbed('🧭 Central de comandos','Escolha um comando pelo menu do Discord. Cada função abre as opções necessárias.',[
+   {name:'🛍️ Loja e compras',value:'Veja o catálogo: `/nexium catalogo`\nConfira um item: `/nexium produto`\nComece uma compra: `/nexium comprar`',inline:false},
+   {name:'📦 Pedidos',value:'Seus pedidos: `/nexium pedidos`\nPagamento: `/nexium pagamento`\nEntrega: `/nexium entrega`',inline:false},
+   {name:'🎧 Atendimento',value:'Abra um ticket: `/ticket abrir` ou `/nexium suporte`\nAcompanhe: `/ticket listar` • Avalie: `/ticket avaliar`',inline:false},
+   {name:'🛡️ Equipe da loja',value:'Painel: `/nexium-admin painel`\nConfiguração: `/nexium-admin configurar` ou `/configurar`\nAgendar: `/nexium-admin agendar`',inline:false},
+  ]);
+  help.embeds[0].color=0x6c5ce7;
+  help.embeds[0].footer={text:'Nexium Store • Selecione uma opção nos comandos'};
+  help.components=[{type:1,components:[
+   {type:2,style:5,label:'Abrir catálogo',url:'https://nexium-store.vercel.app'},
+   {type:2,style:2,label:'Meus pedidos',custom_id:'nexium:my-orders:v1'},
+  ]}];
+  return help;
+ }
  if(sub==='vincular')return privateMessage('Abra https://nexium-store.vercel.app → Minha conta → Conectar minha conta Discord.');
  if(sub==='perfil')return profileCard(db,userId);
  if(sub==='pedidos')return orders(db,userId);
