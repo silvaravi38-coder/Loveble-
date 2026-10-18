@@ -38,7 +38,10 @@ const groupedCommands=[
 
 // Familiar shortcuts reuse the same handlers, authorization and checkout protections.
 export const commandAliases:Record<string,{command:string;sub:string}>={
- configurar:{command:'nexium-admin',sub:'checklist'},'loja-ia':{command:'nexium-admin',sub:'store-ai'},'produto-entrega':{command:'nexium-admin',sub:'product-delivery'},
+ teste:{command:'nexium',sub:'teste'},ajuda:{command:'nexium',sub:'ajuda'},vincular:{command:'nexium',sub:'vincular'},pedidos:{command:'nexium',sub:'pedidos'},catalogo:{command:'nexium',sub:'catalogo'},produto:{command:'nexium',sub:'produto'},comprar:{command:'nexium',sub:'comprar'},pagamento:{command:'nexium',sub:'pagamento'},entrega:{command:'nexium',sub:'entrega'},suporte:{command:'nexium',sub:'suporte'},
+ painel:{command:'nexium-admin',sub:'painel'},'painel-tickets':{command:'nexium-admin',sub:'painel-tickets'},custos:{command:'nexium-admin',sub:'custos'},reconciliar:{command:'nexium-admin',sub:'reconciliar'},scan:{command:'nexium-admin',sub:'scan'},backup:{command:'nexium-admin',sub:'backup'},preview:{command:'nexium-admin',sub:'preview'},aplicar:{command:'nexium-admin',sub:'aplicar'},paineis:{command:'nexium-admin',sub:'paineis'},sincronizar:{command:'nexium-admin',sub:'sincronizar'},despublicar:{command:'nexium-admin',sub:'despublicar'},agendar:{command:'nexium-admin',sub:'agendar'},mensagens:{command:'nexium-admin',sub:'mensagens'},'cancelar-mensagem':{command:'nexium-admin',sub:'cancelar-mensagem'},ia:{command:'nexium-admin',sub:'ia'},restock:{command:'nexium-admin',sub:'restock'},estoque:{command:'nexium-admin',sub:'estoque'},financeiro:{command:'nexium-admin',sub:'financeiro'},suportes:{command:'nexium-admin',sub:'suportes'},
+
+ configurar:{command:'nexium-admin',sub:'configurar'},'loja-ia':{command:'nexium-admin',sub:'store-ai'},'produto-entrega':{command:'nexium-admin',sub:'product-delivery'},
  admin:{command:'nexium-admin',sub:'dashboard'},botconfig:{command:'nexium-admin',sub:'configurar'},
  cupom:{command:'nexium-admin',sub:'cupom'},lock:{command:'nexium-admin',sub:'lock'},unlock:{command:'nexium-admin',sub:'unlock'},
  'meus-pedidos':{command:'nexium',sub:'pedidos'},meu_perfil:{command:'nexium',sub:'perfil'},
@@ -52,7 +55,7 @@ function shortcut(name:string,description:string,options:any[]=[]){
  return {name,type:1,description,options,...(target.command==='nexium-admin'?{default_member_permissions:'32'}:{})};
 }
 function existingOptions(command:string,subName:string):any[]{return groupedCommands.find(c=>c.name===command)!.options.find(s=>s.name===subName)!.options;}
-export const nexiumCommands=[...groupedCommands,
+export const nexiumCommands=[...groupedCommands.filter(command=>!['nexium','nexium-admin'].includes(command.name)),
  {name:'criar',type:1,description:'Cadastrar produtos da Nexium',default_member_permissions:'32',options:[sub('produto','Abrir formulário de cadastro e publicar produto')]},
  shortcut('configurar','Abrir checklist guiado da loja'),
  shortcut('loja-ia','Gerenciar produtos e configurações por IA',[string('texto','Pedido para a IA administrativa',true)]),
@@ -72,5 +75,36 @@ export const nexiumCommands=[...groupedCommands,
  shortcut('painel-estoque','Atualizar o painel existente de solicitação de produtos'),
  shortcut('rank','Consultar atendimentos da equipe neste mês'),
  shortcut('rank-produtos','Ver os produtos mais vendidos',existingOptions('nexium-admin','financeiro')),
+ // Direct command names keep the Nexium feature handlers, without a /nexium or /nexium-admin group prefix.
+ shortcut('teste','Verificar a conexão'),
+ shortcut('ajuda','Abrir o menu de comandos'),
+ shortcut('vincular','Conectar sua conta da loja'),
+ shortcut('pedidos','Consultar seus pedidos'),
+ shortcut('catalogo','Ver produtos disponíveis'),
+ shortcut('produto','Abrir o catálogo e escolher um produto'),
+ shortcut('comprar','Escolher um produto e iniciar a compra'),
+ shortcut('pagamento','Escolher um pedido e consultar o pagamento'),
+ shortcut('entrega','Escolher um pedido e consultar a entrega'),
+ shortcut('suporte','Abrir um atendimento privado',[string('motivo','Motivo do atendimento',true)]),
+ shortcut('painel','Publicar painel de vendas',existingOptions('nexium-admin','painel')),
+ shortcut('painel-tickets','Publicar painel de atendimento',existingOptions('nexium-admin','painel-tickets')),
+ shortcut('custos','Escolher um pedido e registrar custos'),
+ shortcut('reconciliar','Escolher um pedido pendente para reconciliar'),
+ shortcut('scan','Escanear servidor sem alterar a estrutura'),
+ shortcut('backup','Salvar backup estrutural'),
+ shortcut('preview','Criar preview da estrutura',existingOptions('nexium-admin','preview')),
+ shortcut('aplicar','Revisar e aplicar um preview'),
+ shortcut('paineis','Listar painéis de venda'),
+ shortcut('sincronizar','Escolher um painel para atualizar'),
+ shortcut('despublicar','Escolher um painel para desativar'),
+ shortcut('agendar','Programar uma mensagem',existingOptions('nexium-admin','agendar')),
+ shortcut('mensagens','Ver mensagens programadas'),
+ shortcut('cancelar-mensagem','Escolher e cancelar uma mensagem programada'),
+ shortcut('ia','Configurar o atendimento por IA',existingOptions('nexium-admin','ia')),
+ shortcut('restock','Repor estoque de um produto'),
+ shortcut('estoque','Consultar produtos e estoque'),
+ shortcut('financeiro','Ver receita e ticket médio',existingOptions('nexium-admin','financeiro')),
+ shortcut('suportes','Consultar relatórios da equipe'),
+ shortcut('configurar','Abrir o painel de configurações'),
 ];
 export function commandLabels(){return nexiumCommands.map(c=>`/${c.name}${c.options.some(o=>o.type===1)?': '+c.options.map(o=>o.name).join(' • '):''}`);}
