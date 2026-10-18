@@ -28,7 +28,7 @@ export function styleNexiumMessagePayload(message:any){
   const embed={...source};
   return {
    ...embed,
-   author:{name:'✨ NEXIUM STORE',...(embed.author||{})},
+   author:{name:'NEXIUM STORE • SISTEMA',...(embed.author||{})},
    color:embed.color??nexiumBrand.accent,
    footer:{text:nexiumBrand.footer,...(embed.footer||{})},
    timestamp:embed.timestamp||new Date().toISOString(),
