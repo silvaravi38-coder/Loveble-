@@ -334,13 +334,31 @@ test('closed private ticket thread can be deleted while public or foreign thread
  for(const bad of [{...channel,type:11},{...channel,owner_id:'another'},{...channel,name:'unrelated'}])await assert.rejects(deleteClosedTicketChannel(view,'guild',async()=>bad),e=>e.code==='PROTECTED_TICKET_CHANNEL');
 });
 
-test('all outbound embeds share Nexium identity, section dividers and preserve controls',()=>{
+test('outbound embeds use the Nexium visual theme, keep their sections and preserve controls',()=>{
  const input={content:null,components:[{type:1,components:[{type:2,label:'Continuar'}]}],embeds:[{title:'Central',description:'Escolha uma ação.',fields:[{name:'Vendas',value:'Ativas'},{name:'Suporte',value:'Disponível'}]}]};
  const output=styleNexiumMessagePayload(input);
- assert.equal(output.embeds[0].author.name,'NEXIUM STORE');
- assert.equal(output.embeds[0].color,0x5865f2);
+ assert.equal(output.embeds[0].author.name,'✨ NEXIUM STORE');
+ assert.equal(output.embeds[0].color,0x6c5ce7);
  assert.equal(output.embeds[0].footer.text,'NEXIUM STORE • Seu universo digital em um só lugar');
- assert.equal(output.embeds[0].fields.filter(field=>field.name.startsWith('━')).length,2);
+ assert.deepEqual(output.embeds[0].fields,input.embeds[0].fields);
  assert.deepEqual(output.components,input.components);
  assert.equal(output.embeds[0].title,'Central');
+});
+
+test('plain command replies are converted into organized Nexium embeds without losing buttons',()=>{
+ const input={content:'📦 Pedido criado\\nConfira os próximos passos abaixo.',components:[{type:1,components:[{type:2,label:'Ver pedido'}]}]};
+ const output=styleNexiumMessagePayload(input);
+ assert.equal(output.content,null);
+ assert.equal(output.embeds[0].title,'📦 Pedido criado');
+ assert.equal(output.embeds[0].description,'Confira os próximos passos abaixo.');
+ assert.equal(output.embeds[0].author.name,'✨ NEXIUM STORE');
+ assert.equal(output.embeds[0].color,0x6c5ce7);
+ assert.equal(output.components,input.components);
+});
+
+test('single-line plain replies remain readable in the branded embed description',()=>{
+ const output=styleNexiumMessagePayload({content:'Produto indisponível.'});
+ assert.equal(output.content,null);
+ assert.equal(output.embeds[0].title,'✨ Nexium Store');
+ assert.equal(output.embeds[0].description,'Produto indisponível.');
 });
