@@ -161,7 +161,17 @@ test('empty automatic inventory prevents provider charge even with configured cr
  try{await assert.rejects(()=>startPurchase(db,{id:'interaction',guild_id:'guild',channel_id:'channel'},'customer','aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),e=>e.code==='OUT_OF_STOCK');assert.equal(calls,0);}finally{globalThis.Deno=previousDeno;globalThis.fetch=previousFetch;}
 });
 
-test('help lists the published commands and support month respects Fortaleza at UTC boundary',async()=>{const help=await route({}, {type:2,data:{name:'nexium',options:[{name:'ajuda'}]}},'user');assert.match(help.content,/agendar/);assert.match(help.content,/cancelar/);assert.match(help.content,/resumo/);assert(help.content.length<=2000);assert.equal(fortalezaMonthStart(new Date('2026-11-01T01:00:00Z')).toISOString(),'2026-10-01T03:00:00.000Z');});
+test('help uses organized command sections and working store actions while support month respects Fortaleza',async()=>{
+ const help=await route({}, {type:2,data:{name:'nexium',options:[{name:'ajuda'}]}},'user');
+ assert.equal(help.content,null);
+ assert.equal(help.embeds[0].title,'🧭 Central de comandos');
+ assert.equal(help.embeds[0].fields.length,4);
+ assert.match(help.embeds[0].fields[0].value,/\/nexium catalogo/);
+ assert.match(help.embeds[0].fields[2].value,/\/ticket abrir/);
+ assert.equal(help.components[0].components[0].url,'https://nexium-store.vercel.app');
+ assert.equal(help.components[0].components[1].custom_id,'nexium:my-orders:v1');
+ assert.equal(fortalezaMonthStart(new Date('2026-11-01T01:00:00Z')).toISOString(),'2026-10-01T03:00:00.000Z');
+});
 
 
 test('ticket panel selects original Nexium subjects and unpublish removes all controls',async()=>{
@@ -337,7 +347,7 @@ test('closed private ticket thread can be deleted while public or foreign thread
 test('outbound embeds use the Nexium visual theme, keep their sections and preserve controls',()=>{
  const input={content:null,components:[{type:1,components:[{type:2,label:'Continuar'}]}],embeds:[{title:'Central',description:'Escolha uma ação.',fields:[{name:'Vendas',value:'Ativas'},{name:'Suporte',value:'Disponível'}]}]};
  const output=styleNexiumMessagePayload(input);
- assert.equal(output.embeds[0].author.name,'✨ NEXIUM STORE');
+ assert.equal(output.embeds[0].author.name,'NEXIUM STORE • SISTEMA');
  assert.equal(output.embeds[0].color,0x6c5ce7);
  assert.equal(output.embeds[0].footer.text,'NEXIUM STORE • Seu universo digital em um só lugar');
  assert.deepEqual(output.embeds[0].fields,input.embeds[0].fields);
