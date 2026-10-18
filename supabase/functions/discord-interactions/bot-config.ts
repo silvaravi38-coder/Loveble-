@@ -23,14 +23,27 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
  let title='Central de Controle',description='',components:any[]=[],summary:any[]=[];
  const call=(label:string,action:string,option='')=>button(label,prefix+'run:'+action+(option?':'+option:''),2);
  if(page==='home'){
-  title=`Olá, ${name||'Administrador'}!`;
-  description='Bem-vindo à **Central de Controle da Nexium Store**.\nGerencie sua loja, acompanhe os resultados e cuide dos seus clientes.\n\n**O que deseja fazer agora?**\nEscolha uma área nos botões abaixo.';
+  title='Central de Configuração';
+  description='Ajuste os recursos da loja em um só lugar. Escolha uma categoria no menu para abrir as opções correspondentes.';
   summary=[
-   {name:'💳 Vendas Pix',value:settings.pix_enabled?'🟢 Abertas':'⏸️ Pausadas',inline:true},
-   {name:'🎧 Equipe de suporte',value:ref(settings.role_support_id),inline:true},
-   {name:'👤 Cargo de cliente',value:ref(settings.role_customer_id),inline:true},
+   {name:'💳 Vendas Pix',value:settings.pix_enabled?'🟢 Ativas':'⏸️ Pausadas',inline:true},
+   {name:'🎧 Atendimento',value:settings.role_support_id?'🟢 Configurado':'⚠️ Revisar',inline:true},
+   {name:'📋 Logs',value:settings.channel_logs_id?'🟢 Configurados':'⚠️ Revisar',inline:true},
   ];
-  components=[row([toggle('Vendas Pix', 'pix_enabled',!!settings.pix_enabled),nav('Marketplace','marketplace'),nav('Atendimento','atendimento')]),row([nav('Definições','definicoes'),nav('Automações','automacoes'),nav('Moderação','moderacao')]),row([nav('Rendimento','rendimento'),nav('Ferramentas e backups','tools'),nav('Permissões','permissoes')]),row([nav('Personalização','personalizacao'),nav('Conexão e nuvem','oauth')])];
+  components=[row([{type:3,custom_id:prefix+'select:section',placeholder:'Escolha o que deseja configurar',min_values:1,max_values:1,options:[
+   {label:'Pagamentos e comprovantes',value:'pagamentos',description:'Pix, recibos e canal de comprovantes',emoji:{name:'💳'}},
+   {label:'Logs e avisos',value:'canais',description:'Canais de logs, tickets e pagamentos',emoji:{name:'🔔'}},
+   {label:'Vendas, produtos e estoque',value:'marketplace',description:'Canais de compra, catálogo e estoque',emoji:{name:'🛍️'}},
+   {label:'Cargos da loja',value:'cargos',description:'Cliente, suporte e permissões',emoji:{name:'👥'}},
+   {label:'Atendimento e tickets',value:'atendimento',description:'Equipe, categoria e fluxo dos tickets',emoji:{name:'🎧'}},
+   {label:'Verificação do servidor',value:'verification',description:'Canal e cargo liberado após verificar',emoji:{name:'🛡️'}},
+   {label:'Notificações',value:'notificacoes',description:'Mensagens de pagamento e entrega',emoji:{name:'📨'}},
+   {label:'Automações',value:'automacoes',description:'Mensagens, IA e ações automáticas',emoji:{name:'🔄'}},
+   {label:'Moderação',value:'moderacao',description:'Bloquear e restaurar canais',emoji:{name:'🔒'}},
+   {label:'Relatórios e rendimento',value:'rendimento',description:'Vendas, custos e equipe',emoji:{name:'📊'}},
+   {label:'Ferramentas e backups',value:'tools',description:'Diagnóstico, comandos e backups',emoji:{name:'🧰'}},
+   {label:'Personalização da loja',value:'personalizacao',description:'Banners e identidade visual',emoji:{name:'🎨'}},
+  ]}])];
  }else if(page==='marketplace'){
   title='Gerenciar Marketplace';description='Crie canais de venda automaticamente para cada produto ativo do site. Cada canal recebe o card atualizado do produto com preço, imagem, opções e botão de compra.\n\nConsulte estoque e painéis, ou atualize o painel de solicitar produtos.\n**Entregas manuais:** os pedidos pagos aparecem no canal privado de logs, com confirmação de entrega e alerta após 9 horas.\n**Repor estoque:** /gerenciar_stock acao:repor produto:nome\n**Criar cupom:** /cupom\n**Editar produtos e variantes:** administração da loja.';
   components=[row([call('Criar canais de venda','canais-vendas')]),row([call('Consultar estoque','estoque'),call('Listar painéis','paineis'),call('Painel de estoque','painel-estoque')]),row([linkButton('Produtos e variantes','https://nexium-store.vercel.app/admin')]),back()];
@@ -96,7 +109,13 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
 export async function botConfigAction(db:SupabaseClient,input:any,user:string,execute:(sub:string,options:Record<string,any>)=>Promise<any>){
  const actor=await actorFor(db,user);if(actor.role!=='admin')throw new BotError('FORBIDDEN');
  const [action,value,argument,extra]=String(input.data.custom_id).slice(prefix.length).split(':');if(extra)throw new BotError('UNSUPPORTED_ACTION');
- if(action==='select'){if(value!=='automation'||input.data.values?.length!==1||!['divulgacao','notificacoes','moderacao','ia'].includes(input.data.values[0]))throw new BotError('UNSUPPORTED_ACTION');return botConfigPanel(db,input,user,input.data.values[0]);}
+ if(action==='select'){
+  if(input.data.values?.length!==1)throw new BotError('UNSUPPORTED_ACTION');
+  const selected=input.data.values[0];
+  if(value==='section'&&pages.has(selected))return botConfigPanel(db,input,user,selected);
+  if(value==='automation'&&['divulgacao','notificacoes','moderacao','ia'].includes(selected))return botConfigPanel(db,input,user,selected);
+  throw new BotError('UNSUPPORTED_ACTION');
+ }
  if(action==='tab')return botConfigPanel(db,input,user,value);
  if(action==='toggle'){
   if(!['pix_enabled','grant_customer_role_on_paid','dm_customer_on_paid','dm_customer_on_delivery','notify_sale_paid'].includes(value)||!['on','off'].includes(argument))throw new BotError('UNSUPPORTED_ACTION');
