@@ -57,7 +57,7 @@ function shortcut(name:string,description:string,options:any[]=[]){
 function existingOptions(command:string,subName:string):any[]{return groupedCommands.find(c=>c.name===command)!.options.find(s=>s.name===subName)!.options;}
 export const nexiumCommands=[...groupedCommands.filter(command=>!['nexium','nexium-admin'].includes(command.name)),
  {name:'criar',type:1,description:'Cadastrar produtos da Nexium',default_member_permissions:'32',options:[sub('produto','Abrir formulário de cadastro e publicar produto')]},
- shortcut('configurar','Abrir checklist guiado da loja'),
+ shortcut('configurar','Abrir o painel de configurações'),
  shortcut('loja-ia','Gerenciar produtos e configurações por IA',[string('texto','Pedido para a IA administrativa',true)]),
  shortcut('produto-entrega','Configurar entrega automática de produto',[string('produto','Nome ou slug do produto',true),{...string('tipo','Forma de entrega',true),choices:[{name:'Manual',value:'manual'},{name:'Key do estoque',value:'key'},{name:'Cargo Discord',value:'role'},{name:'Arquivo privado',value:'file'}]},{type:8,name:'cargo',description:'Cargo a entregar (tipo Cargo)'},{type:11,name:'arquivo',description:'Arquivo a entregar, até 10 MB (tipo Arquivo)'}]),
  shortcut('admin','Abrir a central administrativa privada'),
@@ -105,6 +105,5 @@ export const nexiumCommands=[...groupedCommands.filter(command=>!['nexium','nexi
  shortcut('estoque','Consultar produtos e estoque'),
  shortcut('financeiro','Ver receita e ticket médio',existingOptions('nexium-admin','financeiro')),
  shortcut('suportes','Consultar relatórios da equipe'),
- shortcut('configurar','Abrir o painel de configurações'),
-];
+ ];
 export function commandLabels(){return nexiumCommands.map(c=>`/${c.name}${c.options.some(o=>o.type===1)?': '+c.options.map(o=>o.name).join(' • '):''}`);}
