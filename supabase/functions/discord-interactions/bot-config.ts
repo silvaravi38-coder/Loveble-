@@ -90,7 +90,7 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
   title='Personalização da Loja';description='A identidade visual da Nexium é gerenciada na administração da loja. Para mensagens do catálogo, consulte os painéis publicados. O QR Pix é gerado pelo provedor para cada pedido.';
   components=[row([linkButton('Personalizar loja e banners','https://nexium-store.vercel.app/admin')]),row([nav('Mensagens de venda','marketplace'),nav('QR Code Pix','pagamentos')]),back()];
  }else if(page==='oauth'){
-  title='Conexão Discord e Nuvem';description='A Nexium usa OAuth para conectar a conta Discord à conta do cliente na loja.\n**Vincular conta:** /nexium vincular\n**Backups:** estrutura do servidor salva no Supabase. Mensagens não são incluídas.\nEsta conexão identifica o cliente; ela não transfere membros entre servidores.';
+  title='Conexão Discord e Nuvem';description='A Nexium usa OAuth para conectar a conta Discord à conta do cliente na loja.\n**Vincular conta:** /vincular\n**Backups:** estrutura do servidor salva no Supabase. Mensagens não são incluídas.\nEsta conexão identifica o cliente; ela não transfere membros entre servidores.';
   components=[row([linkButton('Conectar minha conta','https://nexium-store.vercel.app'),nav('Backups e nuvem','tools')]),back()];
  }else if(page==='moderacao'){
   title='Moderação';description='Bloquear ou desbloquear o canal onde você abriu a central. Cada alteração mostra um preview e exige confirmação; as permissões anteriores ficam salvas.';
@@ -99,7 +99,7 @@ export async function botConfigPanel(db:SupabaseClient,input:any,user:string,pag
   title='Rendimento';description='Receita de pedidos confirmados, custos e taxas registrados. Pedidos sem conciliação são identificados no relatório.';
   components=[row([call('Hoje','financeiro','today'),call('Últimos 7 dias','financeiro','7days'),call('Últimos 30 dias','financeiro','30days')]),row([call('Este mês','financeiro','month'),call('Total','financeiro','total')]),row([call('Ranking de produtos','ranking-produtos'),call('Relatório de suporte','suportes')]),back()];
  }else{
-  title='Ferramentas e backups';description='Sincronize os comandos do servidor e escaneie ou salve backups da estrutura. O preview mostra as mudanças propostas. A aplicação exige selecionar e confirmar o preview pelo comando /nexium-admin aplicar.\nBackups incluem estrutura e permissões; mensagens não são incluídas.';
+  title='Ferramentas e backups';description='Sincronize os comandos do servidor e escaneie ou salve backups da estrutura. O preview mostra as mudanças propostas. A aplicação exige selecionar e confirmar o preview pelo comando /aplicar.\nBackups incluem estrutura e permissões; mensagens não são incluídas.';
   components=[row([call('Atualizar comandos Discord','sync-commands'),nav('Divulgação','divulgacao'),call('Checkers da loja','diagnostico')]),row([call('Escanear servidor','scan'),call('Backup estrutural','backup'),call('Preview organizador','preview')]),row([linkButton('Admin e logs','https://nexium-store.vercel.app/admin')]),back()];
  }
  const descriptionLines=description.split('\n');
