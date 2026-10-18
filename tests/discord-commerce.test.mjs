@@ -361,8 +361,8 @@ test('plain command replies are converted into organized Nexium embeds without l
  assert.equal(output.content,null);
  assert.equal(output.embeds[0].title,'📦 Pedido criado');
  assert.equal(output.embeds[0].description,'Confira os próximos passos abaixo.');
- assert.equal(output.embeds[0].author.name,'✨ NEXIUM STORE');
- assert.equal(output.embeds[0].color,0x6c5ce7);
+ assert.equal(output.embeds[0].author.name,'NEXIUM STORE • SISTEMA');
+ assert.equal(output.embeds[0].color,0x2ecc71);
  assert.equal(output.components,input.components);
 });
 
