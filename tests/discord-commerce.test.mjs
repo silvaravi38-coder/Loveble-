@@ -366,9 +366,19 @@ test('plain command replies are converted into organized Nexium embeds without l
  assert.equal(output.components,input.components);
 });
 
-test('single-line plain replies remain readable in the branded embed description',()=>{
+test('single-line plain replies become concise semantic cards',()=>{
  const output=styleNexiumMessagePayload({content:'Produto indisponível.'});
  assert.equal(output.content,null);
- assert.equal(output.embeds[0].title,'✨ Nexium Store');
- assert.equal(output.embeds[0].description,'Produto indisponível.');
+ assert.equal(output.embeds[0].title,'⚠️ Produto indisponível.');
+ assert.equal(output.embeds[0].color,0xe74c3c);
+ assert.equal(output.embeds[0].description,undefined);
+});
+
+test('multi-line command replies group lists and key-value details into embed fields',()=>{
+ const output=styleNexiumMessagePayload({content:'📦 Pedido criado\\nProduto: Netflix\\nStatus: Aguardando pagamento\\nValor: R$ 10,00'});
+ assert.equal(output.embeds[0].title,'📦 Pedido criado');
+ assert.equal(output.embeds[0].fields.length,3);
+ assert.equal(output.embeds[0].fields[0].name,'📦 Produto');
+ assert.equal(output.embeds[0].fields[1].name,'⚠️ Status');
+ assert.equal(output.embeds[0].fields[2].name,'💳 Valor');
 });
