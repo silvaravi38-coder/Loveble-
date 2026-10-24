@@ -5,7 +5,9 @@ import { afterOrderChange } from "@/lib/orders";
 
 // Apaga canais de tickets encerrados e expira pedidos pendentes vencidos.
 export async function GET(req: NextRequest) {
-  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return new NextResponse("cron not configured", { status: 503 });
+  if (req.headers.get("authorization") !== `Bearer ${secret}`) {
     return new NextResponse("unauthorized", { status: 401 });
   }
   const now = new Date().toISOString();
