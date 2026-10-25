@@ -1,7 +1,8 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
-import { afterOrderChange, brl, STATUS_PT } from "@/lib/orders";
+import { brl, STATUS_PT } from "@/lib/orders";
+import { onOrderChange } from "@/lib/lifecycle";
 import { btn, card, ghost } from "@/lib/ui";
 
 const FROM: Record<string, string> = { paid: "pending", delivered: "paid", cancelled: "pending" };
@@ -16,7 +17,7 @@ async function setStatus(fd: FormData) {
     .eq("id", id).eq("status", from).select().maybeSingle();
   if (data) {
     await db.from("order_events").insert({ order_id: id, type: to, actor: `web:${u.id}` });
-    await afterOrderChange(data, "Painel web", true); // atualiza a mensagem da equipe, avisa o cliente e registra no log
+    await onOrderChange(data, "Painel web", true); // também dispara entrega automática e libera cupom se necessário
   }
   revalidatePath("/admin/orders");
 }
