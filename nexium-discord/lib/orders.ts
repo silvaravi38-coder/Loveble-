@@ -18,6 +18,7 @@ export const orderEmbed = (o: any) => ({
     { name: "Produto", value: o.product_name, inline: true },
     { name: "Plano", value: o.variant_name, inline: true },
     { name: "Valor", value: brl(o.price_cents), inline: true },
+    ...(Number(o.discount_cents) > 0 ? [{ name: "Desconto", value: `−${brl(o.discount_cents)}`, inline: true }] : []),
     { name: "Cliente", value: `<@${o.user_id}>`, inline: true },
     { name: "Pagamento", value: payment(o), inline: true },
     { name: "Status", value: STATUS_PT[o.status], inline: true },
@@ -34,7 +35,10 @@ export const orderButtons = (o: any) =>
         { type: 2, style: 4, label: "Cancelar", custom_id: `od:cancel:${o.id}` },
       ] }]
     : o.status === "paid"
-    ? [{ type: 1, components: [{ type: 2, style: 1, label: "Marcar como entregue", custom_id: `od:deliver:${o.id}` }] }]
+    ? [{ type: 1, components: [
+        { type: 2, style: 1, label: "Marcar como entregue", custom_id: `od:deliver:${o.id}` },
+        ...(o.stock_item_id ? [{ type: 2, style: 2, label: "Reenviar entrega", custom_id: `od:resend:${o.id}` }] : []),
+      ] }]
     : [];
 
 // Fatura do cliente.
@@ -46,6 +50,7 @@ export function invoiceEmbed(o: any, cfg: any, payload?: string | null) {
     { name: "Pagamento", value: payload ? "Pix (copia e cola)" : "Pix", inline: true },
     { name: "Status", value: STATUS_PT[o.status], inline: true },
   ];
+  if (Number(o.discount_cents) > 0) fields.splice(2, 0, { name: "Desconto", value: `−${brl(o.discount_cents)}`, inline: true });
   if (payload) fields.push({ name: "Código Pix", value: "```" + payload + "```" });
   else if (cfg?.manual_pix_key) fields.push({ name: "Chave Pix", value: "```" + cfg.manual_pix_key + "```" });
   else fields.push({ name: "Instruções", value: "A equipe enviará as instruções de pagamento." });
@@ -73,4 +78,12 @@ export async function afterOrderChange(o: any, staffLabel: string, refresh = tru
     tasks.push(api("PATCH", `/channels/${o.staff_channel_id}/messages/${o.staff_message_id}`, { embeds: [orderEmbed(o)], components: orderButtons(o) }).catch(() => {}));
   }
   await Promise.allSettled(tasks);
+}
+
+export async function refreshOrderMessage(o: any) {
+  if (!o.staff_channel_id || !o.staff_message_id) return false;
+  await api("PATCH", `/channels/${o.staff_channel_id}/messages/${o.staff_message_id}`, {
+    embeds: [orderEmbed(o)], components: orderButtons(o),
+  });
+  return true;
 }
