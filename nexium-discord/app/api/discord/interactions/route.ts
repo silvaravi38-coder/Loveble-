@@ -3,7 +3,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { api, verify, C, PERM } from "@/lib/discord";
 import { isOpen } from "@/lib/hours";
-import { handleSales } from "@/lib/sales";
+import { couponSubmit, handleSales } from "@/lib/sales";
 import { ephemeral, logEmbed, logEvent, note, rel, type Kind } from "@/lib/embeds";
 import { buildTranscript, sendFile } from "@/lib/transcript";
 
@@ -52,6 +52,8 @@ async function configMenu(i: any) {
       { type: 2, style: 1, label: "Novo setor", custom_id: "cfg:sector" },
       { type: 2, style: 3, label: "Publicar painel aqui", custom_id: "cfg:publish" },
       { type: 2, style: 1, label: "Painel de vendas", custom_id: "cfg:sales" },
+      { type: 2, style: 2, label: "Canal de avaliações", custom_id: "cfg:reviews" },
+      { type: 2, style: 2, label: "Cargo Cliente", custom_id: "cfg:customerrole" },
     ] },
   ] } });
 }
@@ -83,7 +85,17 @@ async function component(i: any) {
       await say(i.channel_id, { embeds: [{ title: "Atendimento", description: "Escolha um setor para abrir seu ticket.", color: C.main }], components: rows });
       return eph("Painel publicado ✓", "ok");
     }
-    const col = ({ staff: "staff_role_id", logs: "log_channel_id", cat: "category_id", orders: "orders_channel_id" } as Record<string, string>)[act];
+    if (act === "reviews" && !i.data.values) {
+      return J({ type: 4, data: { flags: 64, embeds: [note("Escolha o canal onde as avaliações serão publicadas.")], components: [
+        { type: 1, components: [{ type: 8, custom_id: "cfg:reviews:set", placeholder: "Canal de avaliações", channel_types: [0] }] },
+      ] } });
+    }
+    if (act === "customerrole" && !i.data.values) {
+      return J({ type: 4, data: { flags: 64, embeds: [note("Escolha o cargo que clientes receberão após o pagamento confirmado.")], components: [
+        { type: 1, components: [{ type: 6, custom_id: "cfg:customerrole:set", placeholder: "Cargo de cliente" }] },
+      ] } });
+    }
+    const col = ({ staff: "staff_role_id", logs: "log_channel_id", cat: "category_id", orders: "orders_channel_id", reviews: "reviews_channel_id", customerrole: "customer_role_id" } as Record<string, string>)[act];
     const v = i.data.values?.[0];
     if (col && v) {
       await db.from("discord_settings").upsert({ guild_id: g, [col]: v });
@@ -237,6 +249,7 @@ async function close(i: any) {
 }
 
 async function modal(i: any) {
+  if (String(i.data.custom_id ?? "").startsWith("vp:cupom:")) return couponSubmit(i) ?? eph("Cupom inválido.", "warn");
   if (i.data.custom_id !== "cfg:sector") return eph("Essa ação não está disponível.");
   if (!isAdmin(i)) return eph("Só administradores podem usar isso.");
   const f = Object.fromEntries(i.data.components.map((r: any) => [r.components[0].custom_id, (r.components[0].value ?? "").trim()]));
