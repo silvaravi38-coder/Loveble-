@@ -12,7 +12,7 @@ async function logout() {
 
 export default async function Layout({ children }: { children: React.ReactNode }) {
   await requireAdmin();
-  const links = [["/admin", "Geral"], ["/admin/products", "Produtos"], ["/admin/orders", "Pedidos"], ["/admin/panels", "Painéis"], ["/admin/hours", "Horários"], ["/admin/builder", "Builder"]];
+  const links = [["/admin", "Geral"], ["/admin/products", "Produtos"], ["/admin/stock", "Estoque"], ["/admin/coupons", "Cupons"], ["/admin/orders", "Pedidos"], ["/admin/reviews", "Avaliações"], ["/admin/reports", "Relatórios"], ["/admin/panels", "Painéis"], ["/admin/hours", "Horários"], ["/admin/builder", "Builder"]];
   return (
     <div className="min-h-screen bg-[#2B2D31] text-white">
       <header className="sticky top-0 z-10 border-b border-white/10 bg-[#2B2D31]/95 backdrop-blur">
