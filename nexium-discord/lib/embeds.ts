@@ -28,10 +28,16 @@ export async function logEvent(guildId: string, e: LogEvent) {
 }
 
 export async function dm(userId: string, text: string, kind: Kind = "main") {
+  await dmTry(userId, { embeds: [{ ...note(text, kind), title: "Nexium Store" }] });
+}
+
+// Returns false when the recipient has DMs closed or Discord rejects the message.
+export async function dmTry(userId: string, body: object): Promise<boolean> {
   try {
     const ch = await api("POST", "/users/@me/channels", { recipient_id: userId });
-    await api("POST", `/channels/${ch.id}/messages`, { embeds: [{ ...note(text, kind), title: "Nexium Store" }] });
+    await api("POST", `/channels/${ch.id}/messages`, body);
+    return true;
   } catch {
-    /* DMs fechadas: sem problema */
+    return false;
   }
 }
