@@ -1,4 +1,4 @@
-# Bot e painel da Nexium Store (fases 1 e 2)
+# Bot e painel da Nexium Store (fases 1 a 3)
 
 Roda dentro do projeto Next.js na Vercel, usando o endpoint de interações do Discord (sem processo permanente).
 Copie `app`, `lib`, `scripts`, `supabase` e `vercel.json` para a raiz do projeto.
@@ -9,6 +9,8 @@ Copie `app`, `lib`, `scripts`, `supabase` e `vercel.json` para a raiz do projeto
 **Vendas:** `/config` → "Painel de vendas" publica um menu com os produtos escolhidos. O cliente escolhe produto e plano e recebe uma fatura (embed). O pedido vai para o canal de pedidos da equipe, com botões para confirmar pagamento, marcar como entregue ou cancelar. Um pedido pendente por cliente e plano (cliques repetidos não duplicam). Pedidos pendentes expiram pelo cron. Preço e disponibilidade são lidos do banco na hora.
 
 **Painel web (`/admin`):** login com Supabase, visão geral, produtos e planos (criar, preço, disponibilidade, arquivar), pedidos com filtro e confirmação, mensagem de entrega e chave Pix manual. Toda página e toda ação checa o administrador no servidor.
+
+**Recursos de loja (fase 3):** estoque seguro com entrega automática por DM, cupons percentuais ou de valor fixo, avaliações pós-compra e relatórios de vendas/clientes. Gerencie-os em `/admin/stock`, `/admin/coupons`, `/admin/reviews` e `/admin/reports`. O conteúdo do estoque só é acessível pelo servidor; ele não aparece no navegador.
 
 ## Mensagens padronizadas
 - `lib/embeds.ts` concentra o padrão: azul #5865F2 (padrão), verde #00FF7F (sucesso), vermelho #FF4B4B (erro) e amarelo #FFB900 (aviso). Respostas privadas, logs e mensagens ao cliente usam as mesmas funções.
@@ -40,14 +42,14 @@ IA nos tickets (exige processo permanente) e integração Pix com a TurboFyPay: 
 
 ## Instalação
 1. `npm i @supabase/supabase-js @supabase/ssr tweetnacl`
-2. No Supabase, rode `002_discord_tickets.sql`, `003_sales_admin.sql`, `004_builder.sql`, `005_panels_message.sql` e `006_embeds_transcripts.sql`.
+2. No Supabase, rode as migrations `002_discord_tickets.sql` até `007_store_features.sql`, em ordem. A `007` cria estoque, cupons, avaliações e relatórios; ainda precisa ser aplicada no seu projeto Supabase.
 3. Crie seu usuário em Authentication > Users e libere o acesso ao painel: `insert into admin_users (user_id) values ('ID_DO_SEU_USUARIO');`
 4. Discord Developer Portal: crie o app e o bot; copie Application ID, Public Key e Token.
 5. Preencha as variáveis (`.env.example`) na Vercel e local. `CRON_SECRET` é um texto aleatório longo.
 6. Publique e cole `https://SEU-DOMINIO/api/discord/interactions` em "Interactions Endpoint URL".
 7. `node --env-file=.env.local scripts/register-commands.mjs`
 8. Convite: `https://discord.com/oauth2/authorize?client_id=SEU_APPLICATION_ID&scope=bot%20applications.commands&permissions=268553232`
-9. No servidor: `/config`, escolha cargo, canal de logs, categoria e **canal de pedidos**. Cadastre produtos em `/admin/products` e use "Painel de vendas".
+9. No servidor: `/config`, escolha cargo, canal de logs, categoria, canal de pedidos e, se quiser, cargo Cliente e canal de avaliações. Cadastre produtos em `/admin/products`; para entrega automática, marque a opção no plano e adicione códigos de estoque em `/admin/stock`. Crie cupons em `/admin/coupons` e use "Painel de vendas".
 
 ## Projeto base e teste
 - **Projeto novo:** a pasta `base-projeto/` tem `package.json`, `tsconfig.json`, `next.config.ts`, Tailwind, layout raiz e página inicial. Copie o conteúdo dela para a raiz junto com as outras pastas, rode `npm install` e `npm run build`.
