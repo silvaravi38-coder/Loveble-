@@ -29,7 +29,14 @@ async function saveVariant(fd: FormData) {
   await requireAdmin();
   const price = Number(str(fd, "price").replace(",", "."));
   if (!Number.isFinite(price) || price < 0) return;
-  await db.from("product_variants").update({ price_cents: Math.round(price * 100), available: fd.get("available") === "on" }).eq("id", str(fd, "id"));
+  const low = Number(str(fd, "low_stock_alert"));
+  if (!Number.isInteger(low) || low < 0 || low > 100000) return;
+  await db.from("product_variants").update({
+    price_cents: Math.round(price * 100),
+    available: fd.get("available") === "on",
+    auto_delivery: fd.get("auto_delivery") === "on",
+    low_stock_alert: low,
+  }).eq("id", str(fd, "id"));
   done();
 }
 async function toggleProduct(fd: FormData) {
@@ -62,12 +69,16 @@ export default async function Page() {
             <div><div className="font-semibold">{p.name}</div><div className="text-sm text-white/60">{p.active ? "Ativo" : "Arquivado"}{p.category ? ` · ${p.category}` : ""}</div></div>
             <form action={toggleProduct}><input type="hidden" name="id" value={p.id} /><input type="hidden" name="active" value={String(p.active)} /><button className={ghost}>{p.active ? "Arquivar" : "Reativar"}</button></form>
           </div>
-          {p.product_variants?.map((v: { id: string; name: string; price_cents: number; available: boolean }) => (
-            <form key={v.id} action={saveVariant} className="flex flex-wrap items-center gap-2">
+          {p.product_variants?.map((v: { id: string; name: string; price_cents: number; available: boolean; auto_delivery?: boolean; low_stock_alert?: number }) => (
+            <form key={v.id} action={saveVariant} className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
               <input type="hidden" name="id" value={v.id} />
               <span className="w-24 shrink-0">{v.name}</span>
               <input name="price" defaultValue={(v.price_cents / 100).toFixed(2)} inputMode="decimal" className={`${inp} w-28`} aria-label={`Preço de ${v.name}`} />
               <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" name="available" defaultChecked={v.available} className="size-5" />Disponível</label>
+              <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" name="auto_delivery" defaultChecked={v.auto_delivery ?? false} className="size-5" />Entrega automática</label>
+              <label className="flex min-h-11 items-center gap-2 text-sm">Avisar com
+                <input name="low_stock_alert" type="number" min={0} max={100000} defaultValue={v.low_stock_alert ?? 3} className={`${inp} w-24`} aria-label={`Aviso de estoque baixo de ${v.name}`} />
+              </label>
               <button className={ghost}>Salvar</button>
             </form>
           ))}
